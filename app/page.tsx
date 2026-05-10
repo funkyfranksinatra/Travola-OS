@@ -2,27 +2,22 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
-// ─────────────────────────────────────────────────────────────────────
-// MesaOS — v1.2 (Web Edition)
-// ─────────────────────────────────────────────────────────────────────
-
 // ─── INITIAL DATA ────────────────────────────────────────────────────
 
-// Define 'm' as a number
+// Explicitly defining types for the Vercel build
 const minutesAgo = (m: number) => Date.now() - m * 60_000;
 
-// Define 'capacity' as a number
 const tableSize = (capacity: number) => 48 + Math.min(Math.max(capacity, 1), 12) * 5;
 
-// Define 'table' as any (the quick fix) and 'now' as a number
 const elapsedMin = (table: any, now: number) =>
   table.startedAt ? Math.floor((now - table.startedAt) / 60_000) : 0;
 
-// Define 'groupId' as any and 'tables' as an array
 const groupSize = (groupId: any, tables: any[]) =>
   groupId ? tables.filter((t: any) => t.groupId === groupId).length : 1;
 
-// Define the remaining types for the rest of your helpers
+const groupTurnMin = (table: any, tables: any[]) =>
+  65 + Math.max(0, groupSize(table.groupId, tables) - 1) * 12;
+
 const remainingMin = (table: any, now: number, tables: any[]) => {
   if (!table.startedAt || (table.status !== "dining" && table.status !== "seated")) return null;
   return Math.max(0, groupTurnMin(table, tables) - Math.floor((now - table.startedAt) / 60_000));
