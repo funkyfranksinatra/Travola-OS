@@ -8,7 +8,11 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
 // ─── INITIAL DATA ────────────────────────────────────────────────────
 
-const minutesAgo = (m) => Date.now() - m * 60_000;
+// Add ": number" after m to satisfy the inspector
+const minutesAgo = (m: number) => Date.now() - m * 60_000;
+
+// If you have other helpers like tableSize, do the same:
+const tableSize = (capacity: number) => 48 + Math.min(Math.max(capacity, 1), 12) * 5;
 
 const INITIAL_TABLES = [
   { id: 1,  name: "T1",  x: 60,  y: 60,  capacity: 4,  status: "dining",    party: "Chen",        partySize: 4, startedAt: minutesAgo(28), groupId: null },
