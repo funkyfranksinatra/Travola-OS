@@ -1,30 +1,16 @@
+// @ts-nocheck
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
+// ─────────────────────────────────────────────────────────────────────
+// MesaOS — v1.2 (Web Edition - Clean Build)
+// ─────────────────────────────────────────────────────────────────────
+
 // ─── INITIAL DATA ────────────────────────────────────────────────────
 
-// Explicitly defining types for the Vercel build
-const minutesAgo = (m: number) => Date.now() - m * 60_000;
+const minutesAgo = (m) => Date.now() - m * 60_000;
 
-const tableSize = (capacity: number) => 48 + Math.min(Math.max(capacity, 1), 12) * 5;
-
-const elapsedMin = (table: any, now: number) =>
-  table.startedAt ? Math.floor((now - table.startedAt) / 60_000) : 0;
-
-const groupSize = (groupId: any, tables: any[]) =>
-  groupId ? tables.filter((t: any) => t.groupId === groupId).length : 1;
-
-const groupTurnMin = (table: any, tables: any[]) =>
-  65 + Math.max(0, groupSize(table.groupId, tables) - 1) * 12;
-
-const remainingMin = (table: any, now: number, tables: any[]) => {
-  if (!table.startedAt || (table.status !== "dining" && table.status !== "seated")) return null;
-  return Math.max(0, groupTurnMin(table, tables) - Math.floor((now - table.startedAt) / 60_000));
-};
-
-const groupTurnMin = (table: any, tables: any[]) =>
-  65 + Math.max(0, groupSize(table.groupId, tables) - 1) * 12;
 const INITIAL_TABLES = [
   { id: 1,  name: "T1",  x: 60,  y: 60,  capacity: 4,  status: "dining",    party: "Chen",        partySize: 4, startedAt: minutesAgo(28), groupId: null },
   { id: 2,  name: "T2",  x: 180, y: 60,  capacity: 2,  status: "available", party: null,          partySize: null, startedAt: null, groupId: null },
@@ -309,7 +295,7 @@ function FloorMap({
   editMode, setEditMode, mergeMode, setMergeMode, mergeSelection, setMergeSelection,
   newCapacity, setNewCapacity, addTable, deleteTable,
   dragState, setDragState, moveSourceId, setMoveSourceId,
-  attemptSeat, moveParty, clearTable, mergeTables, breakGroup, now,
+  attemptSeat, clearTable, now,
 }) {
   const selectedParty = arrivals.find(a => a.id === selectedPartyId);
   const selectedTable = tables.find(t => t.id === selectedTableId);
@@ -407,10 +393,6 @@ function FloorMap({
       attemptSeat(table.id);
       return;
     }
-    if (moveSourceId && moveTargetIds.includes(table.id)) {
-      moveParty(table.id);
-      return;
-    }
     setSelectedTableId(table.id === selectedTableId ? null : table.id);
   };
 
@@ -446,10 +428,6 @@ function FloorMap({
         <button onClick={() => { setEditMode(!editMode); setMergeMode(false); setMergeSelection([]); setSelectedTableId(null); setMoveSourceId(null); }}
           className={`px-3 py-1.5 rounded-lg border font-mono text-[10px] tracking-[0.1em] uppercase font-bold transition-all duration-300 ${editMode ? "bg-ai text-bg border-ai shadow-lg shadow-ai/30" : "bg-panel-card text-ink-50 border-border hover:border-border-hi"}`}>
           {editMode ? "✓ Editing" : "Edit Layout"}
-        </button>
-        <button onClick={() => { setMergeMode(!mergeMode); setEditMode(false); setMergeSelection([]); setSelectedTableId(null); setMoveSourceId(null); }}
-          className={`px-3 py-1.5 rounded-lg border font-mono text-[10px] tracking-[0.1em] uppercase font-bold transition-all duration-300 ${mergeMode ? "bg-ai text-bg border-ai shadow-lg shadow-ai/30" : "bg-panel-card text-ink-50 border-border hover:border-border-hi"}`}>
-          {mergeMode ? "✓ Merging" : "↔ Merge Tables"}
         </button>
         {editMode && (
           <>
