@@ -8,12 +8,28 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
 // ─── INITIAL DATA ────────────────────────────────────────────────────
 
-// Add ": number" after m to satisfy the inspector
+// Define 'm' as a number
 const minutesAgo = (m: number) => Date.now() - m * 60_000;
 
-// If you have other helpers like tableSize, do the same:
+// Define 'capacity' as a number
 const tableSize = (capacity: number) => 48 + Math.min(Math.max(capacity, 1), 12) * 5;
 
+// Define 'table' as any (the quick fix) and 'now' as a number
+const elapsedMin = (table: any, now: number) =>
+  table.startedAt ? Math.floor((now - table.startedAt) / 60_000) : 0;
+
+// Define 'groupId' as any and 'tables' as an array
+const groupSize = (groupId: any, tables: any[]) =>
+  groupId ? tables.filter((t: any) => t.groupId === groupId).length : 1;
+
+// Define the remaining types for the rest of your helpers
+const remainingMin = (table: any, now: number, tables: any[]) => {
+  if (!table.startedAt || (table.status !== "dining" && table.status !== "seated")) return null;
+  return Math.max(0, groupTurnMin(table, tables) - Math.floor((now - table.startedAt) / 60_000));
+};
+
+const groupTurnMin = (table: any, tables: any[]) =>
+  65 + Math.max(0, groupSize(table.groupId, tables) - 1) * 12;
 const INITIAL_TABLES = [
   { id: 1,  name: "T1",  x: 60,  y: 60,  capacity: 4,  status: "dining",    party: "Chen",        partySize: 4, startedAt: minutesAgo(28), groupId: null },
   { id: 2,  name: "T2",  x: 180, y: 60,  capacity: 2,  status: "available", party: null,          partySize: null, startedAt: null, groupId: null },
