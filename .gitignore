@@ -49,3 +49,5 @@ next-env.d.ts
 repo_snapshot.tar.gz
 mesa_changes.tar.gz
 _to_delete/
+mesa_changes2.tar.gz
+mesa_changes.b64

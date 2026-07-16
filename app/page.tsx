@@ -349,10 +349,11 @@ function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, o
         <span className="font-mono text-[9px] text-ink-400 tracking-[0.2em] uppercase">{hostMode ? 'Host' : 'v1.2'}</span>
       </div>
       <nav className="flex h-full items-stretch">
-        {/* Host mode is the front-of-house app: no settings (floorplan,
-            staff, hours live on the manager website) and no predictor. */}
+        {/* Host mode is the front-of-house app: no settings tab (floor-
+            plan, staff, hours live on the manager website). Predictor
+            stays — expected volume is exactly what a host plans around. */}
         {(hostMode
-          ? ["floor", "timeline", "waitlist", "service", "calendar"]
+          ? ["floor", "timeline", "waitlist", "service", "predictor", "calendar"]
           : ["floor", "timeline", "waitlist", "service", "predictor", "calendar", "settings"]).map(t => (
           <button
             key={t}
@@ -500,7 +501,7 @@ function ServerRow({ server, onToggle, onShiftToggle = null, onAiLockToggle = nu
   );
 }
 
-function Sidebar({ waitlist, reservations, selectedPartyId, setSelectedPartyId, selectedReservationId, setSelectedReservationId, deleteReservation, deleteWaitlistItem, openModal, openWalkIn, reservationsDisabled = false, walkInDisabled = false, staffReadOnly = false, now, aiReason, servers = [], addServer, toggleServerShift, setServerAiExcluded = null, onPartyDragStart, onPartyDragEnd, isAssignMode = false, setIsAssignMode, assignSelectedServer = null, setAssignSelectedServer, handleAIAssign, aiAssignLoading = false, setEditMode, setMergeMode, setMergeSelection, setViewingServerId, sectionView = false, setSectionView }) {
+function Sidebar({ waitlist, reservations, selectedPartyId, setSelectedPartyId, selectedReservationId, setSelectedReservationId, deleteReservation, deleteWaitlistItem, openModal, openWalkIn, reservationsDisabled = false, walkInDisabled = false, staffReadOnly = false, now, aiReason, servers = [], addServer, toggleServerShift, setServerAiExcluded = null, onPartyDragStart, onPartyDragEnd, onPartyTouchStart = null, partyRowsDraggable = true, isAssignMode = false, setIsAssignMode, assignSelectedServer = null, setAssignSelectedServer, handleAIAssign, aiAssignLoading = false, setEditMode, setMergeMode, setMergeSelection, setViewingServerId, sectionView = false, setSectionView }) {
   const mounted = useMounted();
 
   const onShiftServers = servers.filter(s => s.onShift);
@@ -646,7 +647,7 @@ function Sidebar({ waitlist, reservations, selectedPartyId, setSelectedPartyId, 
                   <div
                     key={item.id}
                     data-reservation-row
-                    draggable
+                    draggable={partyRowsDraggable}
                     onDragStart={(e) => {
                       // Carry the party id; the table tiles read this on drop.
                       e.dataTransfer.setData('application/mesa-party', String(item.id));
@@ -654,6 +655,11 @@ function Sidebar({ waitlist, reservations, selectedPartyId, setSelectedPartyId, 
                       onPartyDragStart && onPartyDragStart(item);
                     }}
                     onDragEnd={() => { onPartyDragEnd && onPartyDragEnd(); }}
+                    // Touch path: press-and-hold lifts the party into a
+                    // finger-following chip (see beginPartyTouchDrag in
+                    // Home). Quick taps still fall through to onClick.
+                    onTouchStart={onPartyTouchStart ? (e) => onPartyTouchStart(e, item) : undefined}
+                    style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
                     onClick={() => {
                       // Every party — walk-in OR reservation — opens
                       // the unified Party Details sidebar. The seating
@@ -1995,7 +2001,11 @@ function FloorMap({
               }`}
             >
               {f.name}{f.isManualOnly && !(editMode && activeFloorId === f.id) && ' 🔒'}
-              {activeFloorId === f.id && !hostMode && (
+              {/* Floor ⋮ menu stays in host mode: blocking a floor or
+                  table from online booking / AI assignment is shift-time
+                  host work (a private party, a closed section), not a
+                  floorplan edit. */}
+              {activeFloorId === f.id && (
                 <span
                   onClick={(e) => {
                     e.stopPropagation();
@@ -2438,7 +2448,7 @@ function FloorMap({
               .sort((a, b) => parseResTime(a.time) - parseResTime(b.time));
 
             return (
-              <div key={t.id} data-table-tile
+              <div key={t.id} data-table-tile data-table-id={String(t.id)}
                 ref={el => { tableRefs.current[t.id] = el; }}
                 onDragOver={(e) => {
                   // Only react to a party being dragged from the guest list —
@@ -8086,6 +8096,94 @@ export default function Home({ hostMode = false } = {}) {
     setAiSuggestedIds(ids);
   };
   const onPartyDragEnd = () => setAiSuggestedIds([]);
+
+  // ── Touch drag-to-seat (iPad) ───────────────────────────────────────
+  // HTML5 drag-and-drop is mouse-first and inconsistent under touch, so
+  // coarse-pointer devices get a hand-rolled equivalent: press-and-hold
+  // a party row (~350ms — a quick tap still opens Party Details), a
+  // floating chip lifts under the finger, tables highlight as the finger
+  // passes over them, and lifting over a table seats the party through
+  // the exact same onSeatPartyDrop path the mouse uses. The pre-
+  // activation phase cancels on >10px movement so list scrolling is
+  // never hijacked.
+  const [coarsePointer, setCoarsePointer] = useState(false);
+  useEffect(() => {
+    setCoarsePointer(!!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches));
+  }, []);
+  const [touchDragGhost, setTouchDragGhost] = useState(null); // { name, size, x, y }
+  const touchDragCleanupRef = useRef(null);
+  useEffect(() => () => { if (touchDragCleanupRef.current) touchDragCleanupRef.current(); }, []);
+  const beginPartyTouchDrag = (e, item) => {
+    if (!coarsePointer || !item || e.touches.length !== 1) return;
+    const t0 = e.touches[0];
+    const start = { x: t0.clientX, y: t0.clientY };
+
+    // Phase 1 — armed. A scroll gesture or an early lift disarms.
+    const disarm = () => {
+      clearTimeout(timer);
+      window.removeEventListener('touchmove', preMove);
+      window.removeEventListener('touchend', disarm);
+      window.removeEventListener('touchcancel', disarm);
+    };
+    const preMove = (ev) => {
+      const tt = ev.touches[0];
+      if (tt && Math.hypot(tt.clientX - start.x, tt.clientY - start.y) > 10) disarm();
+    };
+    window.addEventListener('touchmove', preMove, { passive: true });
+    window.addEventListener('touchend', disarm, { passive: true });
+    window.addEventListener('touchcancel', disarm, { passive: true });
+
+    const timer = setTimeout(() => {
+      disarm();
+      // Phase 2 — lifted. Same guards the mouse path applies on drop.
+      onPartyDragStart(item);
+      setTouchDragGhost({ name: item.name, size: item.size, x: start.x, y: start.y });
+      let hoverTile = null;
+      const setHover = (tile) => {
+        if (tile === hoverTile) return;
+        if (hoverTile) { hoverTile.style.outline = ''; hoverTile.style.outlineOffset = ''; }
+        if (tile) { tile.style.outline = '2px solid var(--color-ai)'; tile.style.outlineOffset = '3px'; }
+        hoverTile = tile;
+      };
+      const tileAt = (x, y) => {
+        const el = document.elementFromPoint(x, y);
+        return el && el.closest ? el.closest('[data-table-tile]') : null;
+      };
+      const cleanup = () => {
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('touchend', onEnd);
+        window.removeEventListener('touchcancel', onCancel);
+        setHover(null);
+        setTouchDragGhost(null);
+        onPartyDragEnd();
+        touchDragCleanupRef.current = null;
+      };
+      touchDragCleanupRef.current = cleanup;
+      const onMove = (ev) => {
+        if (ev.cancelable) ev.preventDefault(); // the drag owns this gesture — no scrolling
+        const tt = ev.touches[0];
+        if (!tt) return;
+        setTouchDragGhost(g => (g ? { ...g, x: tt.clientX, y: tt.clientY } : g));
+        setHover(tileAt(tt.clientX, tt.clientY));
+      };
+      const onEnd = (ev) => {
+        if (ev.cancelable) ev.preventDefault(); // suppress the synthesized click
+        const tt = ev.changedTouches && ev.changedTouches[0];
+        const tile = tt ? tileAt(tt.clientX, tt.clientY) : null;
+        cleanup();
+        if (tile) {
+          const tid = tile.getAttribute('data-table-id');
+          const table = tables.find(x => String(x.id) === String(tid));
+          if (table) onSeatPartyDrop(String(item.id), table.id);
+        }
+      };
+      const onCancel = () => cleanup();
+      window.addEventListener('touchmove', onMove, { passive: false });
+      window.addEventListener('touchend', onEnd, { passive: false });
+      window.addEventListener('touchcancel', onCancel, { passive: true });
+    }, 350);
+  };
+
   const onSeatPartyDrop = (partyId, tableId) => {
     setAiSuggestedIds([]);
     if (!partyId) return;
@@ -9278,7 +9376,7 @@ export default function Home({ hostMode = false } = {}) {
           if (viewingFuture) { setToast('Walk-ins can only be seated on the current day'); return; }
           if (blockIfPending()) return; // a table pick is already in flight
           setWalkInModalOpen(true);
-        }} reservationsDisabled={viewingPast} walkInDisabled={viewingPast || viewingFuture} now={now} aiReason={aiReason} servers={viewServers} staffReadOnly={viewingPast} onPartyDragStart={onPartyDragStart} onPartyDragEnd={onPartyDragEnd} addServer={addServer} toggleServerShift={toggleServerShift} setServerAiExcluded={setServerAiExcluded} isAssignMode={isAssignMode} setIsAssignMode={setIsAssignMode} assignSelectedServer={assignSelectedServer} setAssignSelectedServer={setAssignSelectedServer} handleAIAssign={handleAIAssign} aiAssignLoading={aiAssignLoading} setEditMode={setEditMode} setMergeMode={setMergeMode} setMergeSelection={setMergeSelection} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} />
+        }} reservationsDisabled={viewingPast} walkInDisabled={viewingPast || viewingFuture} now={now} aiReason={aiReason} servers={viewServers} staffReadOnly={viewingPast} onPartyDragStart={onPartyDragStart} onPartyDragEnd={onPartyDragEnd} onPartyTouchStart={beginPartyTouchDrag} partyRowsDraggable={!coarsePointer} addServer={addServer} toggleServerShift={toggleServerShift} setServerAiExcluded={setServerAiExcluded} isAssignMode={isAssignMode} setIsAssignMode={setIsAssignMode} assignSelectedServer={assignSelectedServer} setAssignSelectedServer={setAssignSelectedServer} handleAIAssign={handleAIAssign} aiAssignLoading={aiAssignLoading} setEditMode={setEditMode} setMergeMode={setMergeMode} setMergeSelection={setMergeSelection} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} />
         )}
         <main className="flex-1 flex flex-col overflow-hidden">
           {activeTab === "floor" && (<div className="flex-1 flex overflow-hidden min-h-0"><FloorMap hostMode={hostMode} hydrated={hydrated} onSeatPartyDrop={onSeatPartyDrop} tables={viewTables} selectedTableId={selectedTableId} setSelectedTableId={setSelectedTableId} setSelectedReservationId={setSelectedReservationId} selectedPartyId={selectedPartyId} setSelectedPartyId={setSelectedPartyId} waitlist={waitlist} reservations={viewDateReservations} allReservations={reservations} viewDate={viewDate} setViewDate={setViewDate} editMode={editMode} setEditMode={setEditMode} mergeMode={mergeMode} setMergeMode={setMergeMode} mergeSelection={mergeSelection} setMergeSelection={setMergeSelection} newCapacity={newCapacity} setNewCapacity={setNewCapacity} addTable={addTable} deleteTable={deleteTable} rotateTable={rotateTable} renameTable={renameTable} setTableCapacity={setTableCapacity} setTableShape={setTableShape} setTableArea={setTableArea} renameFloor={renameFloor} reorderFloors={reorderFloors} toggleTableManualOnly={toggleTableManualOnly} toggleTableOnlineExcluded={toggleTableOnlineExcluded} toggleFloorManualOnly={toggleFloorManualOnly} toggleFloorOnlineExcluded={toggleFloorOnlineExcluded} setFloorTablesManualOnly={setFloorTablesManualOnly} setFloorTablesOnlineExcluded={setFloorTablesOnlineExcluded} addFloor={addFloor} undo={undo} canUndo={editHistory.length > 0} dragState={dragState} setDragState={setDragState} moveSourceId={moveSourceId} setMoveSourceId={setMoveSourceId} attemptSeat={attemptSeat} clearTable={clearTable} now={now} aiSuggestedIds={aiSuggestedIds} aiSuggestedRawId={aiSuggestedRawId} servers={viewServers} isAssignMode={isAssignMode} assignSelectedServer={assignSelectedServer} assignTableToServer={assignTableToServer} setIsAssignMode={setIsAssignMode} setAssignSelectedServer={setAssignSelectedServer} viewingServerId={viewingServerId} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} newTableShape={newTableShape} setNewTableShape={setNewTableShape} newTableArea={newTableArea} setNewTableArea={setNewTableArea} reassignReservationId={reassignReservationId} setReassignReservationId={setReassignReservationId} updateReservationTable={updateReservationTable} assignReservationToTables={assignReservationToTables} onAssignConflictPrompt={(p) => setAssignOverride(p)} floors={floors} setFloors={setFloors} activeFloorId={activeFloorId} setActiveFloorId={setActiveFloorId} isAddingFloor={isAddingFloor} setIsAddingFloor={setIsAddingFloor} newFloorName={newFloorName} setNewFloorName={setNewFloorName} underlay={floorUnderlays[activeFloorId] || null} showUnderlay={showUnderlay} setShowUnderlay={setShowUnderlay} migrationActive={!!migrationBackup} onCancelMigration={cancelFloorMigration} deleteFloor={deleteFloor} />{!editMode && (((selectedPartyId || reassignReservationId) && !mergeMode)
@@ -9654,6 +9752,21 @@ export default function Home({ hostMode = false } = {}) {
           onClose={() => setMigrateOpen(false)}
           onCommit={commitFloorMigration}
         />
+      )}
+      {/* Touch drag-to-seat ghost — the party chip riding under the
+          host's finger. pointer-events-none so elementFromPoint sees
+          the tiles beneath it, not the chip itself. */}
+      {touchDragGhost && (
+        <div
+          className="fixed z-[100] pointer-events-none"
+          style={{ left: touchDragGhost.x, top: touchDragGhost.y, transform: 'translate(-50%, -130%)' }}
+        >
+          <div className="px-3.5 py-2 rounded-xl bg-panel-up border border-ai/60 shadow-2xl shadow-black/50 flex items-center gap-2">
+            <span className="text-[13px] text-ink-50 font-semibold whitespace-nowrap">{touchDragGhost.name}</span>
+            <span className="font-mono text-[10px] text-ai font-bold">×{touchDragGhost.size}</span>
+          </div>
+          <div className="mx-auto w-2 h-2 -mt-1 rotate-45 bg-panel-up border-r border-b border-ai/60" />
+        </div>
       )}
       {importOpen && (
         <ImportOverlay
