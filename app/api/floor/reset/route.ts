@@ -15,7 +15,7 @@ export async function POST() {
       select: { id: true, seatedTime: true },
     });
     await prisma.$transaction(
-      seated.map((r) =>
+      seated.map((r: { id: string; seatedTime: Date | null }) =>
         prisma.reservation.update({
           where: { id: r.id },
           data: {
