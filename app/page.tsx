@@ -337,7 +337,7 @@ function useMounted() {
   return mounted;
 }
 
-function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, onOpenService }) {
+function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, onOpenService, hostMode = false }) {
   const mounted = useMounted();
   const time = new Date(now).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   const date = new Date(now).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
@@ -346,10 +346,14 @@ function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, o
     <header className="flex items-center px-6 h-14 bg-panel border-b border-border flex-shrink-0">
       <div className="flex items-baseline gap-2.5 mr-8">
         <span className="font-display text-base font-bold tracking-wide text-ai">MesaOS</span>
-        <span className="font-mono text-[9px] text-ink-400 tracking-[0.2em] uppercase">v1.2</span>
+        <span className="font-mono text-[9px] text-ink-400 tracking-[0.2em] uppercase">{hostMode ? 'Host' : 'v1.2'}</span>
       </div>
       <nav className="flex h-full items-stretch">
-        {["floor", "timeline", "waitlist", "service", "predictor", "calendar", "settings"].map(t => (
+        {/* Host mode is the front-of-house app: no settings (floorplan,
+            staff, hours live on the manager website) and no predictor. */}
+        {(hostMode
+          ? ["floor", "timeline", "waitlist", "service", "calendar"]
+          : ["floor", "timeline", "waitlist", "service", "predictor", "calendar", "settings"]).map(t => (
           <button
             key={t}
             onClick={() => setActiveTab(t)}
@@ -387,7 +391,28 @@ function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, o
   );
 }
 
-function ServerRow({ server, onToggle, onShiftToggle = null, onAiLockToggle = null, isAssignMode = false, isAssignSelected = false, dimmed = false, colorClass = null, colorStyle = null }) {
+// ─── Per-role shift encoding ─────────────────────────────────────────
+// The per-day roster is a flat serverId[] in the DB (ServiceDayStaff.
+// roster). To distinguish "on shift as bartender" from "on shift as
+// waiter" WITHOUT a schema migration, bartender-shift membership is
+// encoded as a prefixed entry: "bar:<id>". Plain "<id>" = waiter shift.
+// Legacy rows (plain id for a bartender-only member) are inferred from
+// the member's roles, so old data keeps working unchanged.
+const BAR_ROSTER_PREFIX = 'bar:';
+function rosterShiftRole(roster, member) {
+  if (!member) return null;
+  const list = Array.isArray(roster) ? roster : [];
+  if (list.includes(BAR_ROSTER_PREFIX + member.id)) return 'bartender';
+  if (list.includes(member.id)) {
+    const roles = member.roles || [];
+    // Legacy inference: a plain entry for a bartender-only member means
+    // they were shifted on as a bartender before roles were encoded.
+    return roles.includes('bartender') && !roles.includes('waiter') ? 'bartender' : 'waiter';
+  }
+  return null;
+}
+
+function ServerRow({ server, onToggle, onShiftToggle = null, onAiLockToggle = null, isAssignMode = false, isAssignSelected = false, dimmed = false, colorClass = null, colorStyle = null, showBarTag = true }) {
   const on = server.onShift;
   const baseCls = "group flex items-center justify-between px-3 py-2 transition-colors";
   const stateCls = dimmed
@@ -443,10 +468,11 @@ function ServerRow({ server, onToggle, onShiftToggle = null, onAiLockToggle = nu
             aria-label="Toggle AI exclusion"
           >{server.aiExcluded ? '🔒' : '🔓'}</span>
         )}
-        {/* Role tag — only renders for bartenders. Server is the default
-            so the absence of a tag = standard server, no extra visual
-            noise for the common case. */}
-        {(server.roles || []).includes('bartender') && (
+        {/* Role tag — only renders for bartenders, and only where the
+            row is shown in a bartender context (showBarTag). The waiter
+            roster passes showBarTag=false so a dual-role member doesn't
+            carry bar noise into the waiter section. */}
+        {showBarTag && (server.roles || []).includes('bartender') && (
           <span className="font-mono text-[8.5px] tracking-[0.1em] uppercase px-1 py-0.5 rounded bg-amber-700/30 border border-amber-700/50 text-amber-300 flex-shrink-0">
             Bar
           </span>
@@ -500,16 +526,19 @@ function Sidebar({ waitlist, reservations, selectedPartyId, setSelectedPartyId, 
   // therefore shows in BOTH lists, so they can still be picked and assigned
   // a section as a waiter on a day they aren't bartending.
   const waitersList    = servers.filter(s => (s.roles || []).includes('waiter') || !(s.roles || []).includes('bartender'));
-  const onShiftBartenders  = bartendersList.filter(s => s.onShift);
-  const offShiftBartenders = bartendersList.filter(s => !s.onShift);
-  const onShiftWaiters     = waitersList.filter(s => s.onShift);
-  const offShiftWaiters    = waitersList.filter(s => !s.onShift);
+  // Per-role shift split. A dual-role member is on shift in exactly ONE
+  // section at a time (s.shiftRole says which); the other section shows
+  // them in its off-shift pool so they can be flipped over with one tap.
+  const onShiftBartenders  = bartendersList.filter(s => s.onShift && s.shiftRole === 'bartender');
+  const offShiftBartenders = bartendersList.filter(s => !(s.onShift && s.shiftRole === 'bartender'));
+  const onShiftWaiters     = waitersList.filter(s => s.onShift && s.shiftRole !== 'bartender');
+  const offShiftWaiters    = waitersList.filter(s => !(s.onShift && s.shiftRole !== 'bartender'));
 
   // Shared roster renderer — captures isAssignMode, toggles, and
   // getServerColor by closure so both sections use identical row
   // behavior. The on-shift / divider / off-shift pattern is the
   // existing logic, just lifted out so we render it twice.
-  const renderRoster = (onShift, offShift) => (
+  const renderRoster = (onShift, offShift, role = 'waiter') => (
     <div className="bg-panel-card rounded-xl overflow-hidden">
       {onShift.map(s => (
         <ServerRow
@@ -520,12 +549,13 @@ function Sidebar({ waitlist, reservations, selectedPartyId, setSelectedPartyId, 
               ? () => setAssignSelectedServer && setAssignSelectedServer(s.id)
               : () => setViewingServerId && setViewingServerId(s.id)
           }
-          onShiftToggle={staffReadOnly ? null : toggleServerShift}
+          onShiftToggle={staffReadOnly ? null : (id) => toggleServerShift(id, role)}
           onAiLockToggle={staffReadOnly ? null : setServerAiExcluded}
           isAssignMode={isAssignMode}
           isAssignSelected={isAssignMode && assignSelectedServer === s.id}
           colorClass={getServerColor(s.id)}
           colorStyle={s.color || null}
+          showBarTag={role === 'bartender'}
         />
       ))}
       {onShift.length > 0 && offShift.length > 0 && (
@@ -534,12 +564,13 @@ function Sidebar({ waitlist, reservations, selectedPartyId, setSelectedPartyId, 
       {offShift.map(s => (
         <ServerRow
           key={s.id}
-          server={s}
-          onToggle={isAssignMode ? () => {} : toggleServerShift}
+          server={{ ...s, onShift: false }}
+          onToggle={isAssignMode ? () => {} : (id) => toggleServerShift(id, role)}
           onAiLockToggle={staffReadOnly ? null : setServerAiExcluded}
           isAssignMode={isAssignMode}
           isAssignSelected={false}
           dimmed={isAssignMode}
+          showBarTag={role === 'bartender'}
         />
       ))}
     </div>
@@ -802,7 +833,7 @@ function Sidebar({ waitlist, reservations, selectedPartyId, setSelectedPartyId, 
           {bartendersList.length === 0 ? (
             <div className="text-center py-3 text-[11px] italic text-ink-400 bg-panel-card rounded-xl">No bartenders added</div>
           ) : (
-            renderRoster(onShiftBartenders, offShiftBartenders)
+            renderRoster(onShiftBartenders, offShiftBartenders, 'bartender')
           )}
 
 
@@ -818,7 +849,7 @@ function Sidebar({ waitlist, reservations, selectedPartyId, setSelectedPartyId, 
           {waitersList.length === 0 ? (
             <div className="text-center py-3 text-[11px] italic text-ink-400 bg-panel-card rounded-xl">No waiters added</div>
           ) : (
-            renderRoster(onShiftWaiters, offShiftWaiters)
+            renderRoster(onShiftWaiters, offShiftWaiters, 'waiter')
           )}
 
         </section>
@@ -1050,6 +1081,7 @@ function FloorMap({
   underlay = null, showUnderlay = false, setShowUnderlay = () => {}, migrationActive = false, onCancelMigration = () => {},
   isAddingFloor = false, setIsAddingFloor, newFloorName = "", setNewFloorName, deleteFloor,
   rotateTable, renameTable, setTableCapacity, setTableShape = null, setTableArea = null, renameFloor = () => {}, reorderFloors = null, toggleTableManualOnly = null, toggleTableOnlineExcluded = null, toggleFloorManualOnly = () => {}, toggleFloorOnlineExcluded = () => {}, setFloorTablesManualOnly = () => {}, setFloorTablesOnlineExcluded = () => {}, addFloor, undo, canUndo = false,
+  hostMode = false,
 }) {
   // Visible tables — only the active floor's tables are rendered, drag-
   // tested, and grouped. Lookups by id (selectedTable, dragState target,
@@ -1117,6 +1149,86 @@ function FloorMap({
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
+  }, []);
+  // ─── Touch gestures (iPad host stand) ──────────────────────────────
+  // One-finger hold-and-drag on the background pans the floor; two-
+  // finger pinch zooms around the pinch midpoint; taps pass through to
+  // the tiles untouched (browsers synthesize clicks from taps). Native
+  // non-passive listeners for the same reason as the wheel handler —
+  // preventDefault() must actually stop Safari's page-level pan/zoom.
+  // The canvas also sets touch-action:none so iOS never argues.
+  useEffect(() => {
+    const el = document.getElementById('floor-canvas');
+    if (!el) return;
+    let gesture = null; // { mode: 'pan'|'pinch', ... }
+    const onTouchStart = (e) => {
+      if (e.touches.length >= 2) {
+        // Second finger down → pinch (even mid-pan).
+        const [a, b] = [e.touches[0], e.touches[1]];
+        const rect = el.getBoundingClientRect();
+        gesture = {
+          mode: 'pinch',
+          dist: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1,
+          zoom: zoomRef.current,
+          midX: (a.clientX + b.clientX) / 2 - rect.left,
+          midY: (a.clientY + b.clientY) / 2 - rect.top,
+          panX: panRef.current.x, panY: panRef.current.y,
+        };
+        e.preventDefault();
+      } else if (e.touches.length === 1) {
+        const t = e.touches[0];
+        // Background only — touches on tiles/popups belong to them.
+        if (t.target.closest && t.target.closest('[data-table-tile], [data-edit-popup], [data-floor-controls], [data-floor-tab], button, input, select')) { gesture = null; return; }
+        gesture = { mode: 'pan', x: t.clientX, y: t.clientY, origX: panRef.current.x, origY: panRef.current.y, moved: false };
+      }
+    };
+    const onTouchMove = (e) => {
+      if (!gesture) return;
+      if (gesture.mode === 'pan' && e.touches.length === 1) {
+        const t = e.touches[0];
+        const dx = t.clientX - gesture.x, dy = t.clientY - gesture.y;
+        // 6px dead zone: below it this is a tap, not a drag.
+        if (!gesture.moved && Math.hypot(dx, dy) < 6) return;
+        gesture.moved = true; panMovedRef.current = true;
+        e.preventDefault();
+        const np = { x: gesture.origX + dx, y: gesture.origY + dy };
+        panRef.current = np; setPan(np);
+      } else if (gesture.mode === 'pinch' && e.touches.length >= 2) {
+        e.preventDefault();
+        const [a, b] = [e.touches[0], e.touches[1]];
+        const rect = el.getBoundingClientRect();
+        const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1;
+        const next = Math.max(0.4, Math.min(2, gesture.zoom * (dist / gesture.dist)));
+        const midX = (a.clientX + b.clientX) / 2 - rect.left;
+        const midY = (a.clientY + b.clientY) / 2 - rect.top;
+        // Keep the world point that was under the pinch midpoint pinned
+        // to the (moving) midpoint — pinch-drag pans and zooms at once.
+        const np = {
+          x: midX - (gesture.midX - gesture.panX) * (next / gesture.zoom),
+          y: midY - (gesture.midY - gesture.panY) * (next / gesture.zoom),
+        };
+        zoomRef.current = next; panRef.current = np;
+        setZoom(next); setPan(np);
+      }
+    };
+    const onTouchEnd = (e) => {
+      if (e.touches.length === 0) { gesture = null; return; }
+      if (gesture && gesture.mode === 'pinch' && e.touches.length === 1) {
+        // Lift one finger out of a pinch → continue as a pan.
+        const t = e.touches[0];
+        gesture = { mode: 'pan', x: t.clientX, y: t.clientY, origX: panRef.current.x, origY: panRef.current.y, moved: true };
+      }
+    };
+    el.addEventListener('touchstart', onTouchStart, { passive: false });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    el.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+      el.removeEventListener('touchcancel', onTouchEnd);
+    };
   }, []);
   const startPan = (e) => {
     // Only pan on a plain background press (left button, not on a tile).
@@ -1829,7 +1941,7 @@ function FloorMap({
             <button
               key={f.id}
               data-floor-tab
-              draggable
+              draggable={!hostMode}
               onDragStart={(e) => {
                 e.dataTransfer.setData('application/mesa-floor', f.id);
                 e.dataTransfer.effectAllowed = 'move';
@@ -1883,7 +1995,7 @@ function FloorMap({
               }`}
             >
               {f.name}{f.isManualOnly && !(editMode && activeFloorId === f.id) && ' 🔒'}
-              {activeFloorId === f.id && (
+              {activeFloorId === f.id && !hostMode && (
                 <span
                   onClick={(e) => {
                     e.stopPropagation();
@@ -2132,7 +2244,7 @@ function FloorMap({
           </button>
         </div>
       )}
-      <div id="floor-canvas" className={`flex-1 relative overflow-hidden bg-panel ${editMode || mergeMode ? "ring-1 ring-ai/30 ring-inset" : ""}`}
+      <div id="floor-canvas" style={{ touchAction: 'none' }} className={`flex-1 relative overflow-hidden bg-panel ${editMode || mergeMode ? "ring-1 ring-ai/30 ring-inset" : ""}`}
         onClick={() => {
           // A pan-drag ends in a click; don't let it deselect/cancel.
           if (panMovedRef.current) { panMovedRef.current = false; return; }
@@ -4349,8 +4461,8 @@ function FloorMigrateOverlay({ tables: existingTables, floors: existingFloors, o
   );
 }
 
-function ImportOverlay({ tables, onClose, onDone }) {
-  const [step, setStep] = useState('pick');            // pick | review
+function ImportOverlay({ tables, onClose, onDone, defaultTurnMinutes = 90 }) {
+  const [step, setStep] = useState('pick');            // pick | review | summary
   const [source, setSource] = useState('opentable');   // opentable | resy | paper | other
   const [defaultDate, setDefaultDate] = useState('');
   const [fileName, setFileName] = useState('');
@@ -4359,6 +4471,9 @@ function ImportOverlay({ tables, onClose, onDone }) {
   const [rows, setRows] = useState([]);
   const [busy, setBusy] = useState(null);              // string status line
   const [err, setErr] = useState(null);
+  const [aiStats, setAiStats] = useState(null);        // applyImportMapping stats (summary step)
+  const [aiWarnings, setAiWarnings] = useState([]);    // mapping.warnings from the model
+  const [commitDone, setCommitDone] = useState(0);     // rows landed so far (chunked commit)
 
   const extractPages = async (imgs, startKey) => {
     const res = await fetch('/api/import/extract', {
@@ -4392,14 +4507,33 @@ function ImportOverlay({ tables, onClose, onDone }) {
     setErr(null);
     setFileName(file.name);
     try {
-      if (/\.csv$/i.test(file.name)) {
-        // Deterministic fast-path: free, instant, no model involved.
-        setBusy('Parsing CSV…');
+      if (/\.(csv|tsv|txt)$/i.test(file.name)) {
+        // AI-mapped path: one model call decodes the file's structure
+        // (columns, date order, status vocabulary); plain code applies
+        // it to every row. No 13,000-row human review — the data goes
+        // to the summary gate and then straight to the database.
+        setBusy('Reading file…');
         const text = await file.text();
-        const parsed = csvToImportRows(parseCsvText(text), tables, defaultDate);
-        if (parsed.length === 0) throw new Error('csv_empty');
-        setRows(parsed);
-        setStep('review');
+        const firstLine = String(text).split(/\r?\n/, 1)[0] || '';
+        const parsedRaw = (firstLine.split('\t').length > firstLine.split(',').length)
+          ? String(text).split(/\r?\n/).filter(l => l.trim() !== '').map(l => l.split('\t'))
+          : parseCsvText(text);
+        if (parsedRaw.length === 0) throw new Error('csv_empty');
+        setBusy('AI is decoding the format…');
+        const res = await fetch('/api/import/ai', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sample: parsedRaw.slice(0, 40), source }),
+        });
+        if (!res.ok) throw new Error('mapping_failed');
+        const { mapping } = await res.json();
+        setBusy(`Organizing ${parsedRaw.length.toLocaleString()} rows…`);
+        const { rows: mapped, stats } = applyImportMapping(parsedRaw, mapping, tables, defaultDate, defaultTurnMinutes);
+        if (mapped.length === 0) throw new Error('csv_empty');
+        setRows(mapped);
+        setAiStats(stats);
+        setAiWarnings(mapping.warnings || []);
+        setStep('summary');
       } else if (/\.pdf$/i.test(file.name)) {
         setBusy('Rendering page 1…');
         const imgs = await pdfFileToPageImages(file, (p, total) =>
@@ -4425,10 +4559,12 @@ function ImportOverlay({ tables, onClose, onDone }) {
       }
     } catch (e) {
       setErr(e && e.message === 'csv_empty'
-        ? 'No data rows found in that CSV.'
+        ? 'No data rows found in that file.'
         : e && e.message === 'unsupported_type'
-          ? 'Use a CSV, PDF, or photo (JPG/PNG).'
-          : 'Could not read that file — check the format and try again.');
+          ? 'Use a CSV/TSV, PDF, or photo (JPG/PNG).'
+          : e && e.message === 'mapping_failed'
+            ? 'The AI could not decode that file’s format — try again, or export it as a standard CSV.'
+            : 'Could not read that file — check the format and try again.');
     } finally {
       setBusy(null);
     }
@@ -4469,6 +4605,46 @@ function ImportOverlay({ tables, onClose, onDone }) {
   const included = rows.filter(r => r.include && !dupKeys.has(r.key));
   const invalid = included.filter(r => !String(r.name).trim() || !/^\d{4}-\d{2}-\d{2}$/.test(r.date || '') || !(Number(r.size) >= 1));
   const unclearCount = included.filter(r => r.unclear).length;
+
+  // Chunked bulk commit for the AI-mapped path. Each chunk is dedupe-
+  // guarded server-side, so a retry after a mid-file failure is safe.
+  const commitBulk = async () => {
+    setErr(null);
+    const CHUNK = 2000;
+    const totals = { created: 0, duplicates: 0, errors: 0, tableLinks: 0 };
+    try {
+      for (let at = 0; at < rows.length; at += CHUNK) {
+        const chunk = rows.slice(at, at + CHUNK);
+        setBusy(`Committing ${Math.min(at + CHUNK, rows.length).toLocaleString()} of ${rows.length.toLocaleString()} rows…`);
+        const res = await fetch('/api/import/commit-bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            source,
+            rows: chunk.map(r => ({
+              name: r.name, date: r.date, time: r.time, size: Number(r.size),
+              status: r.status, seatedTime: r.seatedTime, finishedTime: r.finishedTime,
+              turnMinutes: r.turnMinutes, tableId: r.tableId, kind: r.kind,
+              phone: r.phone || null, email: r.email || null, notes: r.notes || null,
+            })),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error('commit_failed');
+        totals.created += data.created || 0;
+        totals.duplicates += data.duplicates || 0;
+        totals.errors += (data.errors || []).length;
+        totals.tableLinks += data.tableLinks || 0;
+        setCommitDone(at + chunk.length);
+      }
+      onDone(totals);
+      onClose();
+    } catch (_) {
+      setErr(`Commit stopped partway — ${totals.created.toLocaleString()} rows landed safely. Press Commit again to continue; already-landed rows are skipped as duplicates.`);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const commit = async () => {
     setErr(null);
@@ -4528,10 +4704,10 @@ function ImportOverlay({ tables, onClose, onDone }) {
               </div>
             </div>
             <label className="block border-2 border-dashed border-border-hi rounded-2xl p-10 text-center cursor-pointer hover:border-ai/60 transition-colors">
-              <input type="file" accept=".csv,.pdf,image/*" className="hidden" onChange={e => handleFile(e.target.files && e.target.files[0])} />
+              <input type="file" accept=".csv,.tsv,.txt,.pdf,image/*" className="hidden" onChange={e => handleFile(e.target.files && e.target.files[0])} />
               <div className="text-3xl mb-2">📥</div>
               <div className="text-sm text-ink-50 font-semibold">Drop or choose a file</div>
-              <div className="font-mono text-[10px] text-ink-400 mt-1.5">CSV parses instantly and free · PDF pages and photos (including handwriting) are read by AI, then reviewed here</div>
+              <div className="font-mono text-[10px] text-ink-400 mt-1.5">CSV/TSV exports (OpenTable, Resy, Sheets) are decoded and organized by AI · PDF pages and photos (including handwriting) are read by AI, then reviewed here</div>
             </label>
             {busy && <div className="font-mono text-[11px] text-ai animate-pulse">◆ {busy}</div>}
             {err && <div className="font-mono text-[11px] text-rose-300">{err}</div>}
@@ -4612,6 +4788,84 @@ function ImportOverlay({ tables, onClose, onDone }) {
               <button onClick={commit} disabled={!!busy || included.length === 0 || invalid.length > 0}
                 className="px-5 py-2 rounded-lg bg-ai text-bg font-mono text-[11px] uppercase font-bold disabled:opacity-30 disabled:cursor-not-allowed">
                 Commit {included.length} record{included.length === 1 ? '' : 's'}
+              </button>
+            </div>
+          </>
+        )}
+
+        {step === 'summary' && aiStats && (
+          <>
+            <div className="p-6 space-y-4 overflow-auto flex-1">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="font-mono text-[10px] text-ink-400">{fileName}</span>
+                <span className="px-2 py-0.5 rounded bg-ai-bg/40 border border-ai/40 font-mono text-[10px] text-ai uppercase tracking-[0.08em]">AI organized</span>
+              </div>
+              {/* The gate that replaced 13,000 input boxes: what the AI
+                  decoded, what it assumed, what it dropped — one glance,
+                  one button. Predictor food, not a ledger. */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {[
+                  [rows.length.toLocaleString(), 'rows ready to import'],
+                  [aiStats.namedGuests.toLocaleString(), 'with guest names'],
+                  [aiStats.synthesizedNames.toLocaleString(), 'unnamed (kept as "Guest NNNN")'],
+                  [aiStats.tableMatched.toLocaleString(), `table matches${aiStats.tableRemapped ? ` (${aiStats.tableRemapped.toLocaleString()} remapped to nearest table)` : ''}`],
+                  [aiStats.turnDefaults.toLocaleString(), `turn times assumed (${defaultTurnMinutes} min default)`],
+                  [(aiStats.dateless + aiStats.sizeDefaults > 0 ? `${aiStats.dateless.toLocaleString()} / ${aiStats.sizeDefaults.toLocaleString()}` : '0'), 'dropped (no date) / sizes assumed'],
+                ].map(([n, label], i) => (
+                  <div key={i} className="bg-panel-card border border-border rounded-xl px-4 py-3">
+                    <div className="font-display text-xl font-bold text-ink-50">{n}</div>
+                    <div className="font-mono text-[9px] uppercase tracking-[0.1em] text-ink-400 mt-0.5 leading-relaxed">{label}</div>
+                  </div>
+                ))}
+              </div>
+              {aiWarnings.length > 0 && (
+                <div className="bg-amber-400/5 border border-amber-400/30 rounded-xl px-4 py-3 space-y-1">
+                  {aiWarnings.map((w, i) => (
+                    <div key={i} className="font-mono text-[10px] text-amber-300 leading-relaxed">⚠ {w}</div>
+                  ))}
+                </div>
+              )}
+              <div>
+                <div className="font-mono text-[9px] uppercase tracking-[0.15em] text-ink-400 font-bold mb-2">Sample of what will be saved</div>
+                <div className="bg-panel-card border border-border rounded-xl overflow-hidden">
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="border-b border-border">
+                        {['Name', 'Date', 'Time', 'Party', 'Status', 'Turn', 'Table'].map(h => (
+                          <th key={h} className="px-3 py-2 text-left font-mono text-[9px] uppercase tracking-[0.12em] text-ink-400">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.slice(0, 8).map(r => (
+                        <tr key={r.key} className="border-b border-border/50 last:border-0">
+                          <td className="px-3 py-1.5 text-ink-50">{r.name}</td>
+                          <td className="px-3 py-1.5 text-ink-200 font-mono">{r.date}</td>
+                          <td className="px-3 py-1.5 text-ink-200 font-mono">{r.time || '—'}</td>
+                          <td className="px-3 py-1.5 text-ink-200 font-mono">{r.size}</td>
+                          <td className="px-3 py-1.5 text-ink-200">{r.status}</td>
+                          <td className="px-3 py-1.5 text-ink-200 font-mono">{r.turnMinutes ? `${r.turnMinutes}m` : '—'}</td>
+                          <td className="px-3 py-1.5 text-ink-200 font-mono">{r.tableId != null ? (tables.find(t => String(t.id) === String(r.tableId))?.name ?? r.tableId) : (r.tableLabel ? `? ${r.tableLabel}` : '—')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="font-mono text-[9px] text-ink-400 mt-1.5">This history feeds the predictor's training data — assumed values are fine there. Duplicates are skipped automatically, so re-importing the same file is safe.</div>
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-border flex items-center gap-3 flex-shrink-0">
+              {busy && (
+                <span className="font-mono text-[11px] text-ai animate-pulse">◆ {busy}</span>
+              )}
+              {!busy && commitDone > 0 && commitDone < rows.length && (
+                <span className="font-mono text-[11px] text-amber-300">{commitDone.toLocaleString()} of {rows.length.toLocaleString()} landed</span>
+              )}
+              {err && <span className="font-mono text-[11px] text-rose-300">{err}</span>}
+              <button onClick={onClose} className="ml-auto px-4 py-2 rounded-lg bg-panel-card border border-border text-ink-400 hover:text-ink-50 font-mono text-[11px] uppercase tracking-[0.08em]">Cancel</button>
+              <button onClick={commitBulk} disabled={!!busy || rows.length === 0}
+                className="px-5 py-2 rounded-lg bg-ai text-bg font-mono text-[11px] uppercase font-bold disabled:opacity-30 disabled:cursor-not-allowed">
+                {commitDone > 0 && commitDone < rows.length ? 'Resume commit' : `Commit ${rows.length.toLocaleString()} records`}
               </button>
             </div>
           </>
@@ -4990,6 +5244,184 @@ function matchTableByLabel(tablesList, label) {
     if (numeric && (nn === `t${numeric}` || ni === numeric || nn === numeric)) return t.id;
   }
   return null;
+}
+
+// ─── AI-mapped import (deterministic application layer) ──────────────
+// /api/import/ai returns a COLUMN MAPPING from one cheap LLM look at the
+// header + samples; everything below applies that mapping to the whole
+// file locally. The LLM decides "which column is what"; plain code does
+// the 13,000 rows. Fields the file doesn't have get a sane default
+// (turn ← settings default, size ← matched table's capacity) or stay
+// blank — this history feeds the predictor, so approximately-right and
+// complete beats perfect and unimportable.
+
+// "2025-03-14 7:15 PM" / "03/14/2025 19:15" / "7:15 PM" → parts.
+function splitDateTimeParts(raw) {
+  const s = String(raw || '').trim();
+  if (!s) return { date: '', time: '' };
+  const tm = s.match(/(\d{1,2}:\d{2}(?::\d{2})?\s*(?:am|pm|a\.m\.|p\.m\.)?)/i);
+  const time = tm ? tm[1].trim() : '';
+  const date = time ? s.replace(tm[0], '').replace(/[T,@]/g, ' ').trim() : s;
+  return { date: /\d/.test(date.replace(time, '')) && /[\/\-.]|\d{4}/.test(date) ? date : '', time };
+}
+
+// normalizeDateKey assumes M/D/Y for slashed dates; this variant obeys
+// the mapping's detected component order.
+function normalizeDateKeyOrdered(raw, order) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  let m = s.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+  m = s.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+  if (m) {
+    const yy = m[3].length === 2 ? `20${m[3]}` : m[3];
+    const [a, b] = [m[1], m[2]];
+    const [mo, da] = order === 'DMY' ? [b, a] : [a, b];
+    if (Number(mo) > 12 || Number(da) > 31 || Number(mo) < 1 || Number(da) < 1) return null;
+    return `${yy}-${mo.padStart(2, '0')}-${da.padStart(2, '0')}`;
+  }
+  return null;
+}
+
+// "90" / "1:30" / "5400" (seconds) / "1.5" (hours) → minutes or null.
+function parseDurationMinutes(raw, unit) {
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  const hm = s.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (hm) return Number(hm[1]) * 60 + Number(hm[2]);
+  const hmm = s.match(/(\d+)\s*h(?:ours?|rs?)?\s*(\d+)?\s*m?/i);
+  if (hmm && /h/i.test(s)) return Number(hmm[1]) * 60 + (Number(hmm[2]) || 0);
+  const n = parseFloat(s.replace(/[^\d.]/g, ''));
+  if (!Number.isFinite(n) || n <= 0) return null;
+  if (unit === 'seconds') return Math.round(n / 60);
+  if (unit === 'hours') return Math.round(n * 60);
+  if (unit === 'hhmm') return Math.round(n); // already caught by hm above; bare number = minutes
+  // Heuristic guard: a "minutes" column holding 5400 is really seconds.
+  if (n > 600) return Math.round(n / 60);
+  return Math.round(n);
+}
+
+// The "table 21 → table 22" rule: a label the old system used that
+// doesn't exist on THIS floor gets remapped to the nearest-numbered
+// existing table whose capacity fits the parties seen at that label —
+// old floorplans drift by a seat or get renumbered wholesale, and an
+// approximate link beats a dropped one for section history.
+function remapUnmatchedTables(rows, tablesList) {
+  const numOf = (label) => {
+    const m = String(label ?? '').toLowerCase().replace(/[^a-z0-9]/g, '').replace(/^t(?:able)?/, '');
+    return /^\d+$/.test(m) ? parseInt(m, 10) : null;
+  };
+  const numbered = tablesList
+    .map(t => ({ t, num: numOf(t.name) ?? numOf(t.id) }))
+    .filter(x => x.num != null);
+  if (numbered.length === 0) return 0;
+
+  // Party sizes seen at each unmatched label → capacity requirement.
+  const byLabel = new Map();
+  for (const r of rows) {
+    if (r.tableId != null || !r.tableLabel) continue;
+    const n = numOf(r.tableLabel);
+    if (n == null) continue;
+    if (!byLabel.has(n)) byLabel.set(n, { rows: [], sizes: [] });
+    byLabel.get(n).rows.push(r);
+    if (Number(r.size) >= 1) byLabel.get(n).sizes.push(Number(r.size));
+  }
+
+  let remapped = 0;
+  for (const [labelNum, group] of byLabel) {
+    const sizes = group.sizes.sort((a, b) => a - b);
+    const need = sizes.length ? sizes[Math.floor(sizes.length * 0.75)] : null; // p75 — outlier-tolerant
+    const best = numbered
+      .map(x => ({
+        ...x,
+        score: (need != null && Number(x.t.capacity) >= need ? 0 : 100) // fits-the-parties first
+          + Math.abs(x.num - labelNum)                                   // then numeric closeness
+          + (need != null ? Math.abs(Number(x.t.capacity) - need) * 0.1 : 0),
+      }))
+      .sort((a, b) => a.score - b.score)[0];
+    // Only remap plausible drift — a label 40 numbers away is a
+    // different room scheme, not a renumbering; leave it unlinked.
+    if (best && Math.abs(best.num - labelNum) <= 15) {
+      for (const r of group.rows) r.tableId = best.t.id;
+      remapped += group.rows.length;
+    }
+  }
+  return remapped;
+}
+
+// Apply the AI mapping to every parsed row. Returns { rows, stats }.
+function applyImportMapping(csvRows, mapping, tablesList, defaultDate, defaultTurnMinutes) {
+  const cols = mapping.columns || {};
+  const body = (mapping.hasHeader ? csvRows.slice(1) : csvRows)
+    .filter(r => Array.isArray(r) && r.some(c => String(c ?? '').trim() !== ''));
+  const statusLookup = new Map(
+    (mapping.statusMap || []).map(s => [String(s.value).toLowerCase().trim(), s.meaning])
+  );
+  const walkinSet = new Set((mapping.walkInSourceValues || []).map(v => String(v).toLowerCase().trim()));
+  const capacityOf = new Map(tablesList.map(t => [t.id, Number(t.capacity) || null]));
+
+  const stats = { total: body.length, dateless: 0, namedGuests: 0, synthesizedNames: 0, turnDefaults: 0, tableMatched: 0, tableRemapped: 0, sizeDefaults: 0 };
+  const rows = [];
+  for (let i = 0; i < body.length; i++) {
+    const r = body[i];
+    const cell = (idx) => (idx == null || idx === undefined ? '' : String(r[idx] ?? '').trim());
+
+    let name = cell(cols.fullName) || [cell(cols.firstName), cell(cols.lastName)].filter(Boolean).join(' ').trim();
+    if (name) stats.namedGuests++;
+    else { name = `Guest ${String(i + 1).padStart(4, '0')}`; stats.synthesizedNames++; }
+
+    const vd = splitDateTimeParts(cell(cols.visitDate));
+    const dd = splitDateTimeParts(cell(cols.date));
+    const date = normalizeDateKeyOrdered(vd.date || dd.date, mapping.dateOrder)
+      || normalizeDateKey(vd.date || dd.date)
+      || defaultDate || '';
+    if (!date) { stats.dateless++; continue; } // no anchor — useless to the predictor
+
+    const st = splitDateTimeParts(cell(cols.seatedTime));
+    const ft = splitDateTimeParts(cell(cols.finishedTime));
+    const seatedTime = st.time || null;
+    const finishedTime = ft.time || null;
+    const time = cell(cols.time) || vd.time || dd.time || seatedTime || null;
+
+    const rawStatus = cell(cols.status);
+    let status = statusLookup.get(rawStatus.toLowerCase()) || normalizeImportStatus(rawStatus);
+    if (status === 'unknown') status = 'finished';
+
+    let turnMinutes = parseDurationMinutes(cell(cols.totalDuration), mapping.durationUnit);
+    if (turnMinutes == null && !(seatedTime && finishedTime) && status === 'finished') {
+      turnMinutes = defaultTurnMinutes; stats.turnDefaults++; // assumed turn — predictor-grade, not gospel
+    }
+
+    const tableLabel = cell(cols.tableNumber) || null;
+    const tableId = matchTableByLabel(tablesList, tableLabel);
+    if (tableId != null) stats.tableMatched++;
+
+    const noteBits = [cell(cols.notes), cell(cols.tags) ? `Tags: ${cell(cols.tags)}` : ''].filter(Boolean);
+
+    rows.push({
+      key: `ai-${i}`,
+      name, date, time,
+      size: parseInt(cell(cols.partySize), 10) || null,
+      status, seatedTime, finishedTime, turnMinutes,
+      tableLabel, tableId,
+      kind: walkinSet.has(cell(cols.source).toLowerCase()) ? 'walkin' : 'reservation',
+      phone: cell(cols.phone) || null,
+      email: cell(cols.email) || null,
+      notes: noteBits.join(' · ') || null,
+      include: true, unclear: false,
+    });
+  }
+
+  stats.tableRemapped = remapUnmatchedTables(rows, tablesList);
+  stats.tableMatched += stats.tableRemapped;
+  for (const row of rows) {
+    if (!row.size) {
+      // Missing party size: the table they sat at is the best witness.
+      row.size = (row.tableId != null ? capacityOf.get(row.tableId) : null) || 2;
+      stats.sizeDefaults++;
+    }
+  }
+  return { rows, stats };
 }
 
 // Header aliases → canonical import fields (source-agnostic superset of
@@ -6649,7 +7081,7 @@ function ReservationDetailsSidebar({
 
 // ─── ROOT PAGE ───────────────────────────────────────────────────────
 
-export default function Home() {
+export default function Home({ hostMode = false } = {}) {
   const [tables,           setTables]           = useState(INITIAL_TABLES);
   // Start EMPTY: the database is the source of truth and hydration
   // fills these on mount. The hardcoded INITIAL_* seeds are loaded only
@@ -7839,18 +8271,31 @@ export default function Home() {
     );
   };
 
-  const toggleServerShift = (id) => {
-    // Per-day roster toggle. On removal, also drop any sections that
-    // server held that day (an off-shift server can't own tables).
+  const toggleServerShift = (id, role = 'waiter') => {
+    // Per-day, per-ROLE roster toggle. A dual-role member is on shift as
+    // exactly one role at a time: toggling them on in one section clears
+    // the other role's entry (mutual exclusion), toggling them off in the
+    // section they're on clears the shift entirely. Bartender shifts are
+    // encoded as "bar:<id>" roster entries; waiter shifts as plain ids.
     writeDayStaff(rec => {
-      const on = rec.roster.includes(id);
-      if (on) {
-        rec.roster = rec.roster.filter(x => x !== id);
+      const member = servers.find(s => s.id === id) || { id, roles: [] };
+      const current = rosterShiftRole(rec.roster, member);
+      const barKey = BAR_ROSTER_PREFIX + id;
+      const dropSections = () => {
         for (const tid of Object.keys(rec.sections)) {
           if (rec.sections[tid] === id) delete rec.sections[tid];
         }
+      };
+      // Strip both encodings first; re-add what the new state needs.
+      rec.roster = rec.roster.filter(x => x !== id && x !== barKey);
+      if (current === role) {
+        // Off shift entirely — an off-shift server can't own tables.
+        dropSections();
       } else {
-        rec.roster = [...rec.roster, id];
+        rec.roster = [...rec.roster, role === 'bartender' ? barKey : id];
+        // Switching to (or starting) a bartender shift frees any waiter
+        // sections they held — a bartender doesn't own dining tables.
+        if (role === 'bartender') dropSections();
       }
       return rec;
     });
@@ -7871,7 +8316,11 @@ export default function Home() {
         delete sections[key];
         return { ...rec, sections };
       }
-      if (!rec.roster.includes(serverId)) rec.roster = [...rec.roster, serverId];
+      // Assigning a dining section implies a WAITER shift — clear any
+      // bartender-shift entry so the two roles stay mutually exclusive.
+      if (!rec.roster.includes(serverId)) {
+        rec.roster = [...rec.roster.filter(x => x !== BAR_ROSTER_PREFIX + serverId), serverId];
+      }
       rec.sections = { ...rec.sections, [String(tableId)]: serverId };
       return rec;
     });
@@ -7988,7 +8437,14 @@ export default function Home() {
         area: t.area || 'dining',
       })),
       availableServers.map(s => ({
-        id: s.id, name: s.name, roles: s.roles || [],
+        id: s.id, name: s.name,
+        // The host's per-role shift choice overrides static roles: a
+        // dual-role member on shift AS a bartender enters the plan as a
+        // bartender only; on shift AS a waiter they can't be promoted
+        // to the bar. Single-role members are unaffected.
+        roles: s.shiftRole === 'bartender'
+          ? ['bartender']
+          : (s.roles || []).filter(r => r !== 'bartender'),
         avgCovers: stats && stats.perServer ? stats.perServer[s.id] ?? null : null,
       })),
       floors.map(f => ({ id: f.id, name: f.name })),
@@ -8015,8 +8471,16 @@ export default function Home() {
       for (const a of assignments) {
         if (tablesToAssignIds.has(a.tableId)) sections[String(a.tableId)] = a.serverId;
       }
-      // Everyone the assigner used is on shift that day.
-      const roster = Array.from(new Set([...rec.roster, ...assignments.map(a => a.serverId)]));
+      // Everyone the assigner used is on shift that day. Members already
+      // on shift (in either role) keep their existing entry — adding a
+      // plain id for someone on a bartender shift would silently flip
+      // them to a waiter shift.
+      const roster = [...rec.roster];
+      for (const a of assignments) {
+        if (!roster.includes(a.serverId) && !roster.includes(BAR_ROSTER_PREFIX + a.serverId)) {
+          roster.push(a.serverId);
+        }
+      }
       return { roster, sections };
     });
 
@@ -8214,7 +8678,10 @@ export default function Home() {
   // roster (not the global flag). Base identity (name, color, roles)
   // stays global; only the shift status is per-day.
   const viewServers = useMemo(
-    () => servers.map(s => ({ ...s, onShift: viewRecord.roster.includes(s.id) })),
+    () => servers.map(s => {
+      const shiftRole = rosterShiftRole(viewRecord.roster, s);
+      return { ...s, onShift: shiftRole !== null, shiftRole };
+    }),
     [servers, viewRecord.roster]
   );
   // Tables as seen ON THE VIEWED DAY: assignedServerId overlaid from that
@@ -8793,7 +9260,7 @@ export default function Home() {
           <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-400">Loading floor…</div>
         </div>
       )}
-      <Header now={now} activeTab={activeTab} setActiveTab={setActiveTab} occupancy={occupancy} coversToday={serviceLog ? serviceLog.covers.total : null} onOpenService={() => setActiveTab('service')} />
+      <Header now={now} activeTab={activeTab} setActiveTab={setActiveTab} occupancy={occupancy} coversToday={serviceLog ? serviceLog.covers.total : null} onOpenService={() => setActiveTab('service')} hostMode={hostMode} />
       <div className="flex-1 flex overflow-hidden min-h-0">
         {editMode && activeTab === "floor" ? (
           <TableCreatorSidebar
@@ -8814,7 +9281,7 @@ export default function Home() {
         }} reservationsDisabled={viewingPast} walkInDisabled={viewingPast || viewingFuture} now={now} aiReason={aiReason} servers={viewServers} staffReadOnly={viewingPast} onPartyDragStart={onPartyDragStart} onPartyDragEnd={onPartyDragEnd} addServer={addServer} toggleServerShift={toggleServerShift} setServerAiExcluded={setServerAiExcluded} isAssignMode={isAssignMode} setIsAssignMode={setIsAssignMode} assignSelectedServer={assignSelectedServer} setAssignSelectedServer={setAssignSelectedServer} handleAIAssign={handleAIAssign} aiAssignLoading={aiAssignLoading} setEditMode={setEditMode} setMergeMode={setMergeMode} setMergeSelection={setMergeSelection} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} />
         )}
         <main className="flex-1 flex flex-col overflow-hidden">
-          {activeTab === "floor" && (<div className="flex-1 flex overflow-hidden min-h-0"><FloorMap hydrated={hydrated} onSeatPartyDrop={onSeatPartyDrop} tables={viewTables} selectedTableId={selectedTableId} setSelectedTableId={setSelectedTableId} setSelectedReservationId={setSelectedReservationId} selectedPartyId={selectedPartyId} setSelectedPartyId={setSelectedPartyId} waitlist={waitlist} reservations={viewDateReservations} allReservations={reservations} viewDate={viewDate} setViewDate={setViewDate} editMode={editMode} setEditMode={setEditMode} mergeMode={mergeMode} setMergeMode={setMergeMode} mergeSelection={mergeSelection} setMergeSelection={setMergeSelection} newCapacity={newCapacity} setNewCapacity={setNewCapacity} addTable={addTable} deleteTable={deleteTable} rotateTable={rotateTable} renameTable={renameTable} setTableCapacity={setTableCapacity} setTableShape={setTableShape} setTableArea={setTableArea} renameFloor={renameFloor} reorderFloors={reorderFloors} toggleTableManualOnly={toggleTableManualOnly} toggleTableOnlineExcluded={toggleTableOnlineExcluded} toggleFloorManualOnly={toggleFloorManualOnly} toggleFloorOnlineExcluded={toggleFloorOnlineExcluded} setFloorTablesManualOnly={setFloorTablesManualOnly} setFloorTablesOnlineExcluded={setFloorTablesOnlineExcluded} addFloor={addFloor} undo={undo} canUndo={editHistory.length > 0} dragState={dragState} setDragState={setDragState} moveSourceId={moveSourceId} setMoveSourceId={setMoveSourceId} attemptSeat={attemptSeat} clearTable={clearTable} now={now} aiSuggestedIds={aiSuggestedIds} aiSuggestedRawId={aiSuggestedRawId} servers={viewServers} isAssignMode={isAssignMode} assignSelectedServer={assignSelectedServer} assignTableToServer={assignTableToServer} setIsAssignMode={setIsAssignMode} setAssignSelectedServer={setAssignSelectedServer} viewingServerId={viewingServerId} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} newTableShape={newTableShape} setNewTableShape={setNewTableShape} newTableArea={newTableArea} setNewTableArea={setNewTableArea} reassignReservationId={reassignReservationId} setReassignReservationId={setReassignReservationId} updateReservationTable={updateReservationTable} assignReservationToTables={assignReservationToTables} onAssignConflictPrompt={(p) => setAssignOverride(p)} floors={floors} setFloors={setFloors} activeFloorId={activeFloorId} setActiveFloorId={setActiveFloorId} isAddingFloor={isAddingFloor} setIsAddingFloor={setIsAddingFloor} newFloorName={newFloorName} setNewFloorName={setNewFloorName} underlay={floorUnderlays[activeFloorId] || null} showUnderlay={showUnderlay} setShowUnderlay={setShowUnderlay} migrationActive={!!migrationBackup} onCancelMigration={cancelFloorMigration} deleteFloor={deleteFloor} />{!editMode && (((selectedPartyId || reassignReservationId) && !mergeMode)
+          {activeTab === "floor" && (<div className="flex-1 flex overflow-hidden min-h-0"><FloorMap hostMode={hostMode} hydrated={hydrated} onSeatPartyDrop={onSeatPartyDrop} tables={viewTables} selectedTableId={selectedTableId} setSelectedTableId={setSelectedTableId} setSelectedReservationId={setSelectedReservationId} selectedPartyId={selectedPartyId} setSelectedPartyId={setSelectedPartyId} waitlist={waitlist} reservations={viewDateReservations} allReservations={reservations} viewDate={viewDate} setViewDate={setViewDate} editMode={editMode} setEditMode={setEditMode} mergeMode={mergeMode} setMergeMode={setMergeMode} mergeSelection={mergeSelection} setMergeSelection={setMergeSelection} newCapacity={newCapacity} setNewCapacity={setNewCapacity} addTable={addTable} deleteTable={deleteTable} rotateTable={rotateTable} renameTable={renameTable} setTableCapacity={setTableCapacity} setTableShape={setTableShape} setTableArea={setTableArea} renameFloor={renameFloor} reorderFloors={reorderFloors} toggleTableManualOnly={toggleTableManualOnly} toggleTableOnlineExcluded={toggleTableOnlineExcluded} toggleFloorManualOnly={toggleFloorManualOnly} toggleFloorOnlineExcluded={toggleFloorOnlineExcluded} setFloorTablesManualOnly={setFloorTablesManualOnly} setFloorTablesOnlineExcluded={setFloorTablesOnlineExcluded} addFloor={addFloor} undo={undo} canUndo={editHistory.length > 0} dragState={dragState} setDragState={setDragState} moveSourceId={moveSourceId} setMoveSourceId={setMoveSourceId} attemptSeat={attemptSeat} clearTable={clearTable} now={now} aiSuggestedIds={aiSuggestedIds} aiSuggestedRawId={aiSuggestedRawId} servers={viewServers} isAssignMode={isAssignMode} assignSelectedServer={assignSelectedServer} assignTableToServer={assignTableToServer} setIsAssignMode={setIsAssignMode} setAssignSelectedServer={setAssignSelectedServer} viewingServerId={viewingServerId} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} newTableShape={newTableShape} setNewTableShape={setNewTableShape} newTableArea={newTableArea} setNewTableArea={setNewTableArea} reassignReservationId={reassignReservationId} setReassignReservationId={setReassignReservationId} updateReservationTable={updateReservationTable} assignReservationToTables={assignReservationToTables} onAssignConflictPrompt={(p) => setAssignOverride(p)} floors={floors} setFloors={setFloors} activeFloorId={activeFloorId} setActiveFloorId={setActiveFloorId} isAddingFloor={isAddingFloor} setIsAddingFloor={setIsAddingFloor} newFloorName={newFloorName} setNewFloorName={setNewFloorName} underlay={floorUnderlays[activeFloorId] || null} showUnderlay={showUnderlay} setShowUnderlay={setShowUnderlay} migrationActive={!!migrationBackup} onCancelMigration={cancelFloorMigration} deleteFloor={deleteFloor} />{!editMode && (((selectedPartyId || reassignReservationId) && !mergeMode)
             ? <SeatingAssistRail aiThinking={aiThinking} selectedPartyId={selectedPartyId} reassignReservationId={reassignReservationId} reservations={reservations} waitlist={waitlist} tables={tables} aiSuggestedIds={aiSuggestedIds} onMerge={() => { setMergeMode(true); setMergeSelection([]); }} onCancel={() => { setSelectedPartyId(null); setReassignReservationId(null); }} />
             : <ServiceRail serviceLog={serviceLog} now={now} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />)}</div>)}
           {activeTab === "service" && <ServiceView serviceLog={serviceLog} now={now} onRefresh={loadServiceLog} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />}
@@ -9191,6 +9658,7 @@ export default function Home() {
       {importOpen && (
         <ImportOverlay
           tables={tables}
+          defaultTurnMinutes={parseInt(prefs.turnTime, 10) || 90}
           onClose={() => setImportOpen(false)}
           onDone={(res) => {
             setToastOk(`Imported ${res.created} record${res.created === 1 ? '' : 's'}${res.duplicates ? ` · ${res.duplicates} duplicate${res.duplicates === 1 ? '' : 's'} skipped` : ''}`);

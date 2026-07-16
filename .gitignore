@@ -44,3 +44,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# session transfer artifacts
+repo_snapshot.tar.gz
+mesa_changes.tar.gz
+_to_delete/
