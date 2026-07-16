@@ -41,6 +41,4 @@ export async function POST() {
     return Response.json({ ok: true, finished: seated.length });
   } catch (err) {
     console.error("[api/floor/reset POST]", err);
-    return Response.json({ error: "reset_failed" }, { status: 500 });
-  }
-}
+    return Response.json({ error: "r
