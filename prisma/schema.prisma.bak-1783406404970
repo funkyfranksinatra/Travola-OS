@@ -1,0 +1,339 @@
+// ═══════════════════════════════════════════════════════════════════
+// MesaOS — schema.prisma
+// PostgreSQL · Prisma ORM
+//
+// One lifecycle, one table: a Reservation is never moved between
+// "future/current/past" tables — its `status` enum and timestamp trio
+// (targetTime → seatedTime → finishedTime) ARE the lifecycle. The AI
+// predictor reads the Shift rollups (and raw Reservations) using the
+// denormalized time-series keys: serviceDate (@db.Date) + dayOfWeek.
+// "Give me the last 12 Fridays of dinner service" is a single
+// index-backed query: WHERE dayOfWeek = 5 AND period = DINNER
+// ORDER BY serviceDate DESC LIMIT 12.
+// ═══════════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7: connection URLs no longer live in the schema. The CLI
+// (migrate, db push, studio) reads the URL from prisma.config.ts; the
+// runtime client receives a driver adapter in its constructor
+// (see prisma.config.ts and the client setup notes alongside it).
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────
+
+/// The single source of truth for where a reservation sits in its
+/// lifecycle. Future = UPCOMING. Current = SEATED. Past = FINISHED /
+/// NO_SHOW / CANCELLED. No row ever changes tables — only status.
+enum ReservationStatus {
+  UPCOMING
+  SEATED
+  FINISHED
+  NO_SHOW
+  CANCELLED
+}
+
+/// Walk-in lifecycle. SEATED entries graduate into covers on the Shift;
+/// LEFT entries feed the predictor's walk-away/wait-tolerance signal.
+enum WaitlistStatus {
+  WAITING
+  NOTIFIED
+  SEATED
+  LEFT
+}
+
+enum ShiftPeriod {
+  BRUNCH
+  LUNCH
+  DINNER
+}
+
+/// Provenance. Imported OpenTable/Resy CSV history is first-class
+/// training data — flagged, never mixed invisibly with native rows.
+enum BookingSource {
+  MESAOS
+  PHONE
+  WALK_IN
+  OPENTABLE_IMPORT
+  RESY_IMPORT
+}
+
+// ─── CRM ─────────────────────────────────────────────────────────────
+
+model Guest {
+  id          String   @id @default(cuid())
+  name        String
+  phone       String?  @unique
+  email       String?  @unique
+  vip         Boolean  @default(false)
+  /// Global CRM notes — allergies, seating preferences, occasions.
+  notes       String?
+  /// Denormalized counters, maintained transactionally when a
+  /// reservation reaches a terminal status. Cheap to read in the host
+  /// stand's hot path; recomputable from Reservation if ever suspect.
+  totalVisits Int      @default(0)
+  noShowCount Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reservations    Reservation[]
+  waitlistEntries WaitlistEntry[]
+
+  @@index([vip])
+  @@index([name])
+}
+
+// ─── Floor & staff ───────────────────────────────────────────────────
+
+model Table {
+  id       String  @id @default(cuid())
+  name     String  // "T7"
+  capacity Int
+  shape    String  @default("square")
+  area     String  @default("dining")
+  floorId  String  @default("f1")
+  x        Int     @default(0)
+  y        Int     @default(0)
+  rotation Int     @default(0)
+  /// Soft delete: floors get redesigned, but historical reservations
+  /// must keep resolvable table references for the predictor.
+  active   Boolean @default(true)
+
+  // ── Live per-service state ──────────────────────────────────────────
+  // Persisted so a reload mid-service brings the floor back exactly:
+  // who's seated where, bussing flags, and merge groups. Wiped daily at
+  // the service-reset boundary (one hour before opening), enforced
+  // LAZILY on read via liveUpdatedAt — no scheduler needed.
+  status           String    @default("available")
+  party            String?
+  partySize        Int?
+  seatedAt         DateTime?
+  groupId          String?
+  assignedServerId String?
+  liveUpdatedAt    DateTime?
+
+  reservations ReservationTable[]
+
+  @@unique([floorId, name])
+  @@index([active, floorId])
+}
+
+model Server {
+  id       String   @id @default(cuid())
+  name     String
+  /// Floor section tint (hex) — the K-Means assigner's render color.
+  colorHex String?
+  /// Postgres text[]: ["waiter", "bartender"].
+  roles    String[]
+  /// Host-stand roster toggle — persists across reloads so the shift
+  /// board comes back the way it was left.
+  onShift  Boolean  @default(false)
+  active   Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  reservations Reservation[]
+  shifts       ShiftServer[]
+
+  @@index([active])
+}
+
+// ─── Reservations (the single lifecycle table) ───────────────────────
+
+model Reservation {
+  id        String            @id @default(cuid())
+  guestId   String
+  guest     Guest             @relation(fields: [guestId], references: [id])
+  partySize Int
+  status    ReservationStatus @default(UPCOMING)
+  source    BookingSource     @default(MESAOS)
+  notes     String?
+
+  // ── Lifecycle timestamps ──
+  /// When the booking was created (or original OpenTable/Resy booking
+  /// time for imports).
+  bookedAt     DateTime  @default(now())
+  /// The slot: when the party is due. Future rows are UPCOMING rows
+  /// whose targetTime is ahead of now — no separate table.
+  targetTime   DateTime
+  seatedTime   DateTime?
+  finishedTime DateTime?
+  cancelledAt  DateTime?
+
+  // ── Time-series keys (denormalized, set from targetTime in the
+  //    business's local timezone at write time) ──
+  /// Date-only service day — the primary partition key for history.
+  serviceDate DateTime @db.Date
+  /// 0 = Sunday … 6 = Saturday. The predictor's "past Fridays" key.
+  dayOfWeek   Int
+  /// finishedTime − seatedTime in minutes, materialized when the row
+  /// hits FINISHED, so turn-time aggregation never re-derives from
+  /// timestamps at query time.
+  turnMinutes Int?
+
+  // ── Relations ──
+  serverId String?
+  server   Server? @relation(fields: [serverId], references: [id])
+  /// Many-to-many: a merged seating ("T8 + T9") is one reservation
+  /// occupying many tables — modeled properly, not as a joined-id
+  /// string.
+  tables   ReservationTable[]
+  shiftId  String?
+  shift    Shift?  @relation(fields: [shiftId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // The four hot query shapes:
+  @@index([serviceDate, status])          // "today's board", "Oct 24 history"
+  @@index([dayOfWeek, serviceDate])       // "all past Fridays, newest first"
+  @@index([status, targetTime])           // "next UPCOMING arrivals"
+  @@index([guestId, serviceDate])         // guest visit history
+}
+
+/// Join table: which physical tables a reservation occupies. One row
+/// for a normal booking, N rows for a merge. `isPrimary` marks the
+/// anchor table for display ("T8 + T9" renders under T8's badge).
+model ReservationTable {
+  reservationId String
+  tableId       String
+  isPrimary     Boolean @default(false)
+
+  reservation Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  table       Table       @relation(fields: [tableId], references: [id])
+
+  @@id([reservationId, tableId])
+  @@index([tableId])
+}
+
+// ─── Waitlist (walk-ins) ─────────────────────────────────────────────
+
+model WaitlistEntry {
+  id        String         @id @default(cuid())
+  /// Optional: casual walk-ins may never become CRM guests.
+  guestId   String?
+  guest     Guest?         @relation(fields: [guestId], references: [id])
+  /// Display name even when no Guest row exists.
+  name      String
+  partySize Int
+  status    WaitlistStatus @default(WAITING)
+  source    BookingSource  @default(WALK_IN)
+
+  arrivalTime   DateTime @default(now())
+  quotedMinutes Int?
+  /// arrivalTime + quotedMinutes, materialized for "quote accuracy"
+  /// training without timestamp math.
+  quotedTime    DateTime?
+  seatedTime    DateTime?
+  leftTime      DateTime?
+  /// seatedTime − arrivalTime in minutes, materialized on SEATED.
+  actualWaitMinutes Int?
+
+  serviceDate DateTime @db.Date
+  dayOfWeek   Int
+
+  shiftId String?
+  shift   Shift?  @relation(fields: [shiftId], references: [id])
+
+  @@index([serviceDate, status])
+  @@index([status, arrivalTime])
+  @@index([dayOfWeek, serviceDate])
+}
+
+// ─── Shift: the daily rollup the AI predictor trains on ─────────────
+
+/// One row per service period per day ("Dinner on Oct 24"). While the
+/// shift is live these numbers tick up in place (Current data); when
+/// service closes, a finalize job freezes the row (isFinalized) and it
+/// becomes an immutable training snapshot (Past data). Predicted*
+/// columns are written BEFORE service by the AI; actual* columns are
+/// the ground truth it later trains against — every finalized row is a
+/// (prediction, outcome) pair.
+model Shift {
+  id          String      @id @default(cuid())
+  serviceDate DateTime    @db.Date
+  period      ShiftPeriod
+  dayOfWeek   Int
+
+  // ── The prediction (written pre-shift by the AI predictor) ──
+  predictedCovers  Int?
+  predictedServers Int?
+
+  // ── The outcome (live counters → frozen at finalize) ──
+  actualCovers      Int    @default(0)
+  totalReservations Int    @default(0)
+  totalWalkIns      Int    @default(0)
+  noShows           Int    @default(0)
+  cancellations     Int    @default(0)
+  waitlistWalkAways Int    @default(0)
+  avgTurnMinutes    Float?
+  avgWaitMinutes    Float?
+  peakOccupancyPct  Float?
+  serversActual     Int?
+
+  /// Optional exogenous features for the model (weather, local events,
+  /// holidays) — schemaless on purpose; the feature set will evolve
+  /// faster than migrations should.
+  features Json?
+
+  /// Frozen snapshot flag. Finalized rows are the training set;
+  /// unfinalized rows are the live board.
+  isFinalized Boolean  @default(false)
+  finalizedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  reservations    Reservation[]
+  waitlistEntries WaitlistEntry[]
+  servers         ShiftServer[]
+
+  @@unique([serviceDate, period])
+  @@index([dayOfWeek, period, serviceDate]) // "past Fridays' dinners, newest first"
+  @@index([isFinalized, serviceDate])       // training-set scans
+}
+
+/// Many-to-many with payload: which servers actually worked a shift and
+/// what they handled — the ground truth the K-Means assigner and the
+/// staffing predictor are scored against.
+model ShiftServer {
+  shiftId      String
+  serverId     String
+  coversServed Int    @default(0)
+  tablesWorked Int    @default(0)
+
+  shift  Shift  @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+  server Server @relation(fields: [serverId], references: [id])
+
+  @@id([shiftId, serverId])
+  @@index([serverId])
+}
+
+// ─── Floor & configuration ───────────────────────────────────────────
+
+/// Floors are layout containers ("Main Floor", "Patio"). Relation-free
+/// by design: Table.floorId is a plain string, so adding this model to
+/// an existing database needs no backfill. Soft-deleted like tables.
+model Floor {
+  id           String  @id
+  name         String
+  isManualOnly Boolean @default(false)
+  sortOrder    Int     @default(0)
+  active       Boolean @default(true)
+}
+
+/// Singleton (id "main"). Typed columns only for values other systems
+/// consume (the Timeline reads hours; role chips read roles); the
+/// host-stand preference pile (24h clock, sound alerts, turn-time
+/// defaults, ...) lives in `prefs` Json so new toggles never require a
+/// migration — same rationale as Shift.features.
+model RestaurantSettings {
+  id           String   @id @default("main")
+  openMinutes  Int?
+  closeMinutes Int?
+  roles        String[] @default(["waiter", "bartender"])
+  prefs        Json?
+  updatedAt    DateTime @updatedAt
+}
