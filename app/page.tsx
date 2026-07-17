@@ -101,6 +101,16 @@ const DEFAULT_PREFS = {
   pagerAlerts: false,
   emailDigest: true,
   teamView: false,
+  // Location powers the predictor's weather + live web research. The
+  // predictor resolves it from here first (then env vars, then a
+  // single-tenant default). Seeded with the current pilot venue so the
+  // signals work out of the box; editable in Settings → Location.
+  location: {
+    name: "Volario's",
+    lat: '39.9197758',
+    lon: '-105.7904009',
+    address: '',
+  },
 };
 
 const INITIAL_RESERVATIONS = [];
@@ -2727,7 +2737,7 @@ function FloorMap({
   );
 }
 
-function PredictorView({ forecast = null, loading = false, error = null, onRefresh, date, setDate, factors = {}, setFactors }) {
+function PredictorView({ forecast = null, loading = false, error = null, onRefresh, date, setDate }) {
   // 7-day selector chips
   const dayChips = useMemo(() => {
     const out = [];
@@ -2743,12 +2753,6 @@ function PredictorView({ forecast = null, loading = false, error = null, onRefre
     return out;
   }, []);
   const f = forecast;
-  const FACTOR_DEFS = [
-    { key: 'event', label: 'Local event', pct: '+15%' },
-    { key: 'promotion', label: 'Promotion', pct: '+10%' },
-    { key: 'construction', label: 'Construction', pct: '−10%' },
-    { key: 'competitor', label: 'Competitor', pct: '−7%' },
-  ];
   const maxHourly = f && f.hourly && f.hourly.length ? Math.max(...f.hourly.map(x => x.expected), 1) : 1;
   const verdictStyle = f && f.staffing ? (
     f.staffing.verdict === 'under' ? 'text-amber-300 border-amber-500/50 bg-amber-500/10'
@@ -2762,7 +2766,7 @@ function PredictorView({ forecast = null, loading = false, error = null, onRefre
         <div className="flex items-baseline justify-between mb-4">
           <div>
             <h2 className="font-display text-2xl font-bold text-ink-50 tracking-tight">Shift Forecast</h2>
-            <p className="font-mono text-[10px] text-ink-400 mt-1">Deterministic forecast from your own history, the book, the floor, and declared factors — anything unknown is excluded and listed.</p>
+            <p className="font-mono text-[10px] text-ink-400 mt-1">Deterministic forecast from your own history, the book, the floor, live weather, and web research — anything unknown is excluded and listed.</p>
           </div>
           {onRefresh && (
             <button onClick={onRefresh} disabled={loading} className="font-mono text-[10px] text-ai uppercase tracking-[0.1em] hover:opacity-80 disabled:opacity-40">
@@ -2780,27 +2784,14 @@ function PredictorView({ forecast = null, loading = false, error = null, onRefre
               }`}>{c.label}</button>
           ))}
         </div>
-        {/* Manager-declared factors — fallback only: hidden when the
-            engine researched events/promos/construction/competitor live
-            (forecast.research), where these appear in the factors card. */}
-        {(!f || f.research !== true) && (
-        <div className="flex items-center gap-1.5 mb-6 flex-wrap">
-          <span className="font-mono text-[9px] text-ink-500 uppercase tracking-[0.1em] mr-1">Declare:</span>
-          {FACTOR_DEFS.map(d => (
-            <button key={d.key}
-              onClick={() => setFactors && setFactors(prev => ({ ...prev, [d.key]: !prev[d.key] }))}
-              className={`px-2.5 py-1 rounded-lg font-mono text-[9px] uppercase tracking-[0.05em] border transition-colors ${
-                factors[d.key] ? 'bg-amber-500/15 text-amber-300 border-amber-500/50' : 'bg-panel text-ink-500 border-border hover:text-ink-300'
-              }`}
-              title={`Unknowable to the system — declare it to apply ${d.pct}`}
-            >{factors[d.key] ? '✓ ' : ''}{d.label} {d.pct}</button>
-          ))}
-        </div>
-        )}
+        {/* No manual "declare" toggles: events, promotions, construction
+            and competitor action are researched live from the web per
+            forecast date and appear in the factors card below. */}
 
         {loading && !f && (
           <div className="bg-panel border border-border rounded-2xl p-10 text-center">
             <div className="font-mono text-[10px] text-ai tracking-[0.2em] uppercase animate-pulse">◆ Building the shift forecast…</div>
+            <div className="font-mono text-[10px] text-ink-400 mt-3 leading-relaxed">Researching this date on the web — local events, access, competitors, promotions, reviews, buzz and season. The first forecast of a date can take up to ~40s; after that it's cached.</div>
           </div>
         )}
         {error && !f && (
@@ -4518,31 +4509,57 @@ function ImportOverlay({ tables, onClose, onDone, defaultTurnMinutes = 90 }) {
     setFileName(file.name);
     try {
       if (/\.(csv|tsv|txt)$/i.test(file.name)) {
-        // AI-mapped path: one model call decodes the file's structure
-        // (columns, date order, status vocabulary); plain code applies
-        // it to every row. No 13,000-row human review — the data goes
-        // to the summary gate and then straight to the database.
+        // Two-stage, AI-optional pipeline:
+        //   1. DETERMINISTIC (no AI) — sniff the delimiter, parse the
+        //      file, identify columns by header name. A labelled export
+        //      (OpenTable, Resy, a Sheet) is fully mapped right here.
+        //   2. AI ENHANCEMENT (best-effort) — hand the now-tabular
+        //      sample to the LLM to fill any columns the header pass
+        //      missed and to read odd/unlabelled files. If this call
+        //      fails for ANY reason, we keep the deterministic mapping
+        //      and import anyway. The AI never gates a standard CSV.
         setBusy('Reading file…');
         const text = await file.text();
-        const firstLine = String(text).split(/\r?\n/, 1)[0] || '';
-        const parsedRaw = (firstLine.split('\t').length > firstLine.split(',').length)
-          ? String(text).split(/\r?\n/).filter(l => l.trim() !== '').map(l => l.split('\t'))
-          : parseCsvText(text);
+        const { rows: parsedRaw } = decodeTabularFile(text);
         if (parsedRaw.length === 0) throw new Error('csv_empty');
-        setBusy('AI is decoding the format…');
-        const res = await fetch('/api/import/ai', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sample: parsedRaw.slice(0, 40), source }),
-        });
-        if (!res.ok) throw new Error('mapping_failed');
-        const { mapping } = await res.json();
+
+        const detMapping = deterministicMapping(parsedRaw);
+        let mapping = detMapping;
+
+        // Only ask the AI when it can actually help: the deterministic
+        // pass missed the essentials (name + date/size) or barely
+        // matched anything. A clean labelled file skips the call
+        // entirely — faster, free, and immune to API hiccups.
+        const hasName = detMapping.columns.fullName != null || detMapping.columns.firstName != null || detMapping.columns.lastName != null;
+        const hasDate = detMapping.columns.date != null || detMapping.columns.visitDate != null;
+        const needsAi = detMapping.matchedCount < 3 || !hasName || !hasDate;
+        if (needsAi) {
+          setBusy('AI is reading the columns…');
+          try {
+            const res = await fetch('/api/import/ai', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ sample: parsedRaw.slice(0, 40), source }),
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.mapping) mapping = mergeMappings(detMapping, data.mapping);
+            }
+          } catch (_) { /* AI unavailable — deterministic mapping stands */ }
+        }
+
         setBusy(`Organizing ${parsedRaw.length.toLocaleString()} rows…`);
         const { rows: mapped, stats } = applyImportMapping(parsedRaw, mapping, tables, defaultDate, defaultTurnMinutes);
-        if (mapped.length === 0) throw new Error('csv_empty');
+        if (mapped.length === 0) {
+          // Parsed fine but nothing usable — almost always no date
+          // anywhere and no default date chosen.
+          throw new Error(stats && stats.dateless > 0 ? 'no_dates' : 'no_columns');
+        }
         setRows(mapped);
         setAiStats(stats);
-        setAiWarnings(mapping.warnings || []);
+        const warn = [...(mapping.warnings || [])];
+        if (mapping === detMapping && needsAi) warn.unshift('Imported without AI — columns were matched by header name. Check the sample below.');
+        setAiWarnings(warn);
         setStep('summary');
       } else if (/\.pdf$/i.test(file.name)) {
         setBusy('Rendering page 1…');
@@ -4572,9 +4589,11 @@ function ImportOverlay({ tables, onClose, onDone, defaultTurnMinutes = 90 }) {
         ? 'No data rows found in that file.'
         : e && e.message === 'unsupported_type'
           ? 'Use a CSV/TSV, PDF, or photo (JPG/PNG).'
-          : e && e.message === 'mapping_failed'
-            ? 'The AI could not decode that file’s format — try again, or export it as a standard CSV.'
-            : 'Could not read that file — check the format and try again.');
+          : e && e.message === 'no_dates'
+            ? 'None of the rows had a date, and no default date is set — pick a Default Date above, then re-add the file.'
+            : e && e.message === 'no_columns'
+              ? 'Couldn’t identify the columns in that file. If it has no header row, add one (e.g. Name, Date, Party Size) and try again.'
+              : 'Could not read that file — check the format and try again.');
     } finally {
       setBusy(null);
     }
@@ -4901,6 +4920,8 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
   const pagerAlerts    = prefs.pagerAlerts    ?? false;
   const emailDigest    = prefs.emailDigest    ?? true;
   const teamView       = prefs.teamView       ?? false;
+  const location = prefs.location || {};
+  const setLoc = (field, val) => setPref && setPref('location', { ...(prefs.location || {}), [field]: val });
   const setTwentyFourHour = (v) => setPref && setPref('twentyFourHour', v);
   const setSoundAlerts    = (v) => setPref && setPref('soundAlerts', v);
   const setAutoAssign     = (v) => setPref && setPref('autoAssign', v);
@@ -4984,6 +5005,43 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
               </div>
               <SettingToggle on={soundAlerts} onChange={setSoundAlerts} />
             </div>
+          </div>
+        </section>
+
+        {/* Location & live signals */}
+        <section className="bg-panel border border-border rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-border bg-panel-card">
+            <h2 className="font-mono text-[11px] text-ink-400 tracking-[0.14em] uppercase font-bold">Location &amp; Predictor Signals</h2>
+          </div>
+          <div className="px-5 py-4 flex flex-col gap-4">
+            <p className="font-mono text-[10px] text-ink-400 leading-relaxed">
+              The predictor uses this to pull the local weather forecast and to run live web research — nearby events, road/construction access, competitor activity, promotions, review trajectory, social buzz, and tourism/economic conditions — for the shift you're forecasting. Coordinates drive the weather; the name lets the web search pin your venue.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="flex flex-col gap-1">
+                <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-ink-400 font-bold">Restaurant name</span>
+                <input type="text" value={location.name ?? ''} onChange={e => setLoc('name', e.target.value)} placeholder="e.g. Volario's"
+                  className="bg-panel-card border border-border-hi rounded-lg px-3 py-2 text-sm text-ink-50 outline-none focus:border-ai" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-ink-400 font-bold">Street address <span className="normal-case tracking-normal font-normal">(optional)</span></span>
+                <input type="text" value={location.address ?? ''} onChange={e => setLoc('address', e.target.value)} placeholder="used for research if set"
+                  className="bg-panel-card border border-border-hi rounded-lg px-3 py-2 text-sm text-ink-50 outline-none focus:border-ai" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-ink-400 font-bold">Latitude</span>
+                <input type="text" inputMode="decimal" value={location.lat ?? ''} onChange={e => setLoc('lat', e.target.value)} placeholder="39.9197758"
+                  className="bg-panel-card border border-border-hi rounded-lg px-3 py-2 text-sm text-ink-50 outline-none focus:border-ai font-mono" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="font-mono text-[9px] uppercase tracking-[0.15em] text-ink-400 font-bold">Longitude</span>
+                <input type="text" inputMode="decimal" value={location.lon ?? ''} onChange={e => setLoc('lon', e.target.value)} placeholder="-105.7904009"
+                  className="bg-panel-card border border-border-hi rounded-lg px-3 py-2 text-sm text-ink-50 outline-none focus:border-ai font-mono" />
+              </label>
+            </div>
+            <p className="font-mono text-[9px] text-ink-500 leading-relaxed">
+              Find coordinates by right-clicking your restaurant in Google Maps → the lat, lon pair at the top. Changes save automatically and apply the next time you refresh a forecast.
+            </p>
           </div>
         </section>
 
@@ -5436,47 +5494,185 @@ function applyImportMapping(csvRows, mapping, tablesList, defaultDate, defaultTu
 
 // Header aliases → canonical import fields (source-agnostic superset of
 // the common OpenTable/Resy export headings, expressed generically).
+// Header aliases → the canonical mapping column fields (see
+// applyImportMapping). Exact normalized-header match, so "Party Size" →
+// partysize hits `partySize`, never `size` on some other column. This is
+// the DETERMINISTIC column identifier: a labelled export (OpenTable,
+// Resy, a Google Sheet) is fully mapped by these alone — the AI is only
+// consulted to fill gaps or read unlabelled/odd files, and its failure
+// never blocks a standard import.
 const IMPORT_HEADER_ALIASES = {
-  name: ['name', 'guest', 'guestname', 'party', 'partyname'],
-  date: ['date', 'resdate', 'reservationdate', 'visitdate', 'day'],
-  time: ['time', 'restime', 'reservationtime', 'booked', 'bookedtime'],
-  size: ['size', 'partysize', 'covers', 'guests', 'pax', 'count'],
-  status: ['status', 'state', 'outcome'],
-  seatedTime: ['seated', 'seatedtime', 'arrival', 'arrived', 'arrivaltime'],
-  finishedTime: ['finished', 'completed', 'departure', 'departed', 'lefttime', 'endtime'],
-  turnMinutes: ['turn', 'turntime', 'duration', 'minutes', 'turnminutes'],
-  tableLabel: ['table', 'tables', 'tablenumber', 'tableno', 'tablelabel'],
+  // Ordered by priority: earlier fields claim a column first so a
+  // header that could match two fields lands on the more specific one.
+  firstName: ['firstname', 'first', 'fname', 'guestfirstname'],
+  lastName: ['lastname', 'last', 'lname', 'surname', 'guestlastname'],
+  phoneticName: ['phoneticname', 'phonetic'],
+  fullName: ['name', 'guest', 'guestname', 'party', 'partyname', 'fullname', 'guestfullname', 'customer', 'customername', 'diner'],
+  partySize: ['size', 'partysize', 'covers', 'guests', 'pax', 'count', 'numberofguests', 'seats', 'guestcount', 'people', 'ppl', 'noofguests'],
+  visitDate: ['visitdate', 'visitdatetime', 'reservationdatetime', 'datetime', 'seateddatetime'],
+  date: ['date', 'resdate', 'reservationdate', 'day', 'servicedate', 'businessdate', 'bookingdate'],
+  time: ['time', 'restime', 'reservationtime', 'booked', 'bookedtime', 'bookingtime'],
+  createdTime: ['createdtime', 'created', 'createdat', 'bookedon', 'bookingcreated', 'datecreated'],
+  lastUpdated: ['lastupdated', 'updated', 'updatedat', 'lastmodified', 'modified', 'datemodified'],
+  seatedTime: ['seated', 'seatedtime', 'seatedon', 'seatedat', 'arrival', 'arrived', 'arrivaltime'],
+  finishedTime: ['finished', 'finishedtime', 'finishedat', 'completed', 'completedtime', 'departure', 'departed', 'lefttime', 'endtime', 'donetime'],
+  totalDuration: ['totalduration', 'duration', 'turn', 'turntime', 'turnminutes', 'minutes', 'length', 'visitduration', 'timeattable', 'dwelltime'],
+  phone: ['phone', 'phonenumber', 'phoneno', 'mobile', 'cell', 'telephone', 'tel', 'contactnumber', 'contact'],
+  email: ['email', 'emailaddress', 'guestemail', 'mail'],
+  marketingOptIn: ['marketingoptin', 'optin', 'marketing', 'emailoptin', 'subscribed', 'emailconsent'],
+  source: ['source', 'channel', 'bookingsource', 'origin', 'reservationsource', 'bookingchannel', 'via'],
+  shift: ['shift', 'mealperiod', 'meal', 'period', 'service', 'daypart', 'seating'],
+  tableNumber: ['table', 'tables', 'tablenumber', 'tableno', 'tablelabel', 'tablename', 'tableid', 'tbl'],
+  posRevenue: ['posrevenue', 'revenue', 'checktotal', 'total', 'saleamount', 'netsales', 'grosssales', 'amount', 'spend', 'checkamount'],
+  posGratuity: ['posgratuity', 'gratuity', 'tip', 'gratuityamount', 'tipamount'],
+  totalGratuity: ['totalgratuity', 'totaltip', 'totalgratuityamount'],
+  notes: ['notes', 'note', 'comments', 'comment', 'specialrequests', 'requests', 'remarks'],
+  tags: ['tags', 'tag', 'labels', 'guesttags', 'visittags'],
+  status: ['status', 'state', 'outcome', 'reservationstatus', 'visitstatus', 'resstatus'],
 };
 
-function csvToImportRows(csvRows, tablesList, defaultDate) {
-  if (csvRows.length < 2) return [];
-  const headers = csvRows[0].map(h => String(h).toLowerCase().replace(/[^a-z0-9]/g, ''));
-  const col = {};
-  for (const [field, aliases] of Object.entries(IMPORT_HEADER_ALIASES)) {
-    const idx = headers.findIndex(h => aliases.includes(h));
-    if (idx >= 0) col[field] = idx;
+// ─── Deterministic format decode (no AI) ─────────────────────────────
+// Sniff the delimiter, parse the whole file, return rows-as-arrays. The
+// LLM never sees raw bytes: this hands it already-tabular data so it can
+// reason about MEANING, not file format.
+function sniffDelimiter(text) {
+  const firstLines = String(text).split(/\r?\n/).filter(l => l.trim() !== '').slice(0, 5);
+  const candidates = [',', '\t', ';', '|'];
+  let best = ',', bestScore = -1;
+  for (const d of candidates) {
+    // Score by the median field count across sample lines — the real
+    // delimiter yields many, consistent columns.
+    const counts = firstLines.map(l => l.split(d).length);
+    const score = counts.length ? counts.reduce((a, b) => a + b, 0) / counts.length : 0;
+    if (score > bestScore) { bestScore = score; best = d; }
   }
-  const get = (r, f) => (col[f] != null ? String(r[col[f]] ?? '').trim() : '');
-  return csvRows.slice(1).filter(r => r.some(c => String(c).trim() !== '')).map((r, i) => {
-    const tableLabel = get(r, 'tableLabel');
-    const turnRaw = get(r, 'turnMinutes');
-    return {
-      key: `csv-${i}`,
-      name: get(r, 'name'),
-      date: normalizeDateKey(get(r, 'date')) || defaultDate || '',
-      time: get(r, 'time') || null,
-      size: parseInt(get(r, 'size'), 10) || null,
-      status: normalizeImportStatus(get(r, 'status')),
-      seatedTime: get(r, 'seatedTime') || null,
-      finishedTime: get(r, 'finishedTime') || null,
-      turnMinutes: turnRaw && /^\d+/.test(turnRaw) ? parseInt(turnRaw, 10) : null,
-      tableLabel: tableLabel || null,
-      tableId: matchTableByLabel(tablesList, tableLabel),
-      kind: 'reservation',
-      unclear: false,
-      include: true,
-    };
-  });
+  return best;
+}
+
+// General delimited parser (RFC-4180-ish): quotes, escaped quotes, CRLF.
+// parseCsvText stays for the comma case; this generalizes to any char.
+function parseDelimited(text, delimiter) {
+  if (delimiter === ',') return parseCsvText(text);
+  const rows = [];
+  let row = [], field = '', inQ = false;
+  const s = String(text);
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inQ) {
+      if (c === '"') { if (s[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else if (c === '"') inQ = true;
+    else if (c === delimiter) { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && s[i + 1] === '\n') i++;
+      row.push(field); field = '';
+      if (row.length > 1 || row[0] !== '') rows.push(row);
+      row = [];
+    } else field += c;
+  }
+  row.push(field);
+  if (row.length > 1 || row[0] !== '') rows.push(row);
+  return rows;
+}
+
+function decodeTabularFile(text) {
+  const delimiter = sniffDelimiter(text);
+  const rows = parseDelimited(text, delimiter);
+  return { delimiter, rows };
+}
+
+// ─── Deterministic column mapping (no AI) ────────────────────────────
+// Produces the SAME mapping shape the AI route returns, from header
+// names + data samples alone. A labelled export is fully handled here;
+// applyImportMapping consumes this object directly. Returns matchedCount
+// so the caller knows whether AI help is even needed.
+function deterministicMapping(csvRows) {
+  const empty = {
+    hasHeader: false,
+    columns: {}, dateOrder: 'MDY', durationUnit: 'unknown',
+    statusMap: [], walkInSourceValues: [], warnings: [], confidence: 'low',
+    matchedCount: 0,
+  };
+  if (!Array.isArray(csvRows) || csvRows.length === 0) return empty;
+  const header = (csvRows[0] || []).map(h => String(h ?? '').toLowerCase().replace(/[^a-z0-9]/g, ''));
+
+  const columns = {};
+  const claimed = new Set();
+  for (const [field, aliases] of Object.entries(IMPORT_HEADER_ALIASES)) {
+    const idx = header.findIndex((h, i) => !claimed.has(i) && h && aliases.includes(h));
+    if (idx >= 0) { columns[field] = idx; claimed.add(idx); }
+  }
+  const matchedCount = Object.keys(columns).length;
+  // Header row present when we recognized real column titles.
+  const hasHeader = matchedCount >= 1;
+  const body = hasHeader ? csvRows.slice(1) : csvRows;
+
+  // dateOrder from evidence: scan the date/visitDate column for a
+  // component that can only be a day (>12) or can only be a month.
+  let dateOrder = 'MDY';
+  const dateIdx = columns.date != null ? columns.date : columns.visitDate;
+  if (dateIdx != null) {
+    for (const r of body.slice(0, 400)) {
+      const m = String(r[dateIdx] ?? '').match(/(\d{1,2})[\/.\-](\d{1,2})[\/.\-]\d{2,4}/);
+      if (!m) continue;
+      const a = Number(m[1]), b = Number(m[2]);
+      if (a > 12 && b <= 12) { dateOrder = 'DMY'; break; }
+      if (b > 12 && a <= 12) { dateOrder = 'MDY'; break; }
+    }
+  }
+
+  // statusMap from the distinct raw values actually present.
+  const statusMap = [];
+  if (columns.status != null) {
+    const seen = new Set();
+    for (const r of body) {
+      const v = String(r[columns.status] ?? '').trim();
+      if (!v || seen.has(v.toLowerCase())) continue;
+      seen.add(v.toLowerCase());
+      statusMap.push({ value: v, meaning: normalizeImportStatus(v) === 'unknown' ? 'finished' : normalizeImportStatus(v) });
+      if (statusMap.length > 40) break;
+    }
+  }
+
+  // Walk-in source values — anything that reads like a walk-in.
+  const walkInSourceValues = [];
+  if (columns.source != null) {
+    const seen = new Set();
+    for (const r of body) {
+      const v = String(r[columns.source] ?? '').trim();
+      if (!v || seen.has(v.toLowerCase())) continue;
+      seen.add(v.toLowerCase());
+      if (/walk|wi\b|walkin/i.test(v)) walkInSourceValues.push(v);
+      if (seen.size > 60) break;
+    }
+  }
+
+  return { hasHeader, columns, dateOrder, durationUnit: 'unknown', statusMap, walkInSourceValues, warnings: [], confidence: matchedCount >= 3 ? 'high' : 'medium', matchedCount };
+}
+
+// Merge an AI mapping onto the deterministic base: the deterministic
+// column wins where it matched a real header (high precision); the AI
+// fills only the columns the header pass left null (odd/unlabelled
+// files). Non-column signals prefer whichever side has data.
+function mergeMappings(base, ai) {
+  if (!ai) return base;
+  const columns = { ...(ai.columns || {}) , ...Object.fromEntries(Object.entries(base.columns || {})) };
+  // (base spread last → base non-null wins; but keep AI where base absent)
+  for (const [k, v] of Object.entries(ai.columns || {})) {
+    if (columns[k] == null && v != null) columns[k] = v;
+  }
+  const statusMap = (base.statusMap && base.statusMap.length) ? base.statusMap : (ai.statusMap || []);
+  const walkInSourceValues = Array.from(new Set([...(base.walkInSourceValues || []), ...(ai.walkInSourceValues || [])]));
+  return {
+    hasHeader: base.hasHeader || !!ai.hasHeader,
+    columns,
+    dateOrder: (base.dateOrder && base.dateOrder !== 'MDY') ? base.dateOrder : (ai.dateOrder || base.dateOrder || 'MDY'),
+    durationUnit: (ai.durationUnit && ai.durationUnit !== 'unknown') ? ai.durationUnit : (base.durationUnit || 'unknown'),
+    statusMap,
+    walkInSourceValues,
+    warnings: [...(ai.warnings || [])],
+    confidence: base.matchedCount >= 3 ? 'high' : (ai.confidence || base.confidence),
+  };
 }
 
 // Rasterise a PDF's pages to JPEG data-URLs in the browser via pdf.js.
@@ -7746,7 +7942,6 @@ export default function Home({ hostMode = false } = {}) {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
-  const [predictorFactors, setPredictorFactors] = useState({});
   const predictorKeyRef = useRef('');
 
   // ─── AI Seating Agent state ───────────────────────────────────────
@@ -7847,7 +8042,7 @@ export default function Home({ hostMode = false } = {}) {
       const res = await fetch('/api/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: predictorDate, factors: predictorFactors }),
+        body: JSON.stringify({ date: predictorDate }),
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -7856,7 +8051,7 @@ export default function Home({ hostMode = false } = {}) {
       const data = await res.json();
       setPredictorData(data);
       setPredictorFetchedAt(Date.now());
-      predictorKeyRef.current = `${predictorDate}|${JSON.stringify(predictorFactors)}`;
+      predictorKeyRef.current = predictorDate;
     } catch (e) {
       setPredictorError(e instanceof Error ? e.message : 'Failed to fetch predictions');
     } finally {
@@ -7866,14 +8061,13 @@ export default function Home({ hostMode = false } = {}) {
 
   useEffect(() => {
     if (activeTab !== 'predictor') return;
-    const key = `${predictorDate}|${JSON.stringify(predictorFactors)}`;
     const STALE_AFTER_MS = 60_000;
-    const isStale = !predictorFetchedAt || Date.now() - predictorFetchedAt > STALE_AFTER_MS || predictorKeyRef.current !== key;
+    const isStale = !predictorFetchedAt || Date.now() - predictorFetchedAt > STALE_AFTER_MS || predictorKeyRef.current !== predictorDate;
     if (isStale && !predictorLoading) {
       fetchPredictions();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, predictorDate, predictorFactors]);
+  }, [activeTab, predictorDate]);
 
   // ─── AI Seating Agent — fetch on party selection OR reassign mode ─
   useEffect(() => {
@@ -9385,7 +9579,7 @@ export default function Home({ hostMode = false } = {}) {
           {activeTab === "service" && <ServiceView serviceLog={serviceLog} now={now} onRefresh={loadServiceLog} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />}
           {activeTab === "timeline" && <TimelineView reservations={todaysReservations} restaurantHours={restaurantHours} onSelectReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} />}
           {activeTab === "waitlist" && <WaitlistView waitlist={waitlist} reservations={todaysReservations} now={now} onSeatParty={seatFromWaitlist} onOpenReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} onDeleteParty={(id) => requestDelete('waitlist', id)} />}
-          {activeTab === "predictor" && <PredictorView forecast={predictorData} loading={predictorLoading} error={predictorError} onRefresh={fetchPredictions} date={predictorDate} setDate={setPredictorDate} factors={predictorFactors} setFactors={setPredictorFactors} />}
+          {activeTab === "predictor" && <PredictorView forecast={predictorData} loading={predictorLoading} error={predictorError} onRefresh={fetchPredictions} date={predictorDate} setDate={setPredictorDate} />}
           {activeTab === "settings" && <SettingsView setEditMode={setEditMode} setActiveTab={setActiveTab} floors={floors} tables={tables} servers={servers} roles={roles} addServer={addServer} removeServer={removeServer} setServerColor={setServerColor} setServerRoles={setServerRoles} addRole={addRole} removeRole={removeRole} restaurantHours={restaurantHours} setRestaurantHours={setRestaurantHours} prefs={prefs} setPref={setPref} onResetLiveFloor={resetLiveFloor} onOpenImport={() => setImportOpen(true)} onOpenMigrate={() => setMigrateOpen(true)} />}
           {activeTab === "calendar" && (
             <CalendarView

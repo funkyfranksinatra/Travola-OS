@@ -28,20 +28,46 @@ import { openai } from "@ai-sdk/openai";
 //   · Day-of-week + seasonality: inherent in the same-weekday baseline
 //     and the last-year blend (reported as used).
 //   · Payday cycles: 1st/15th/month-end ±1 day → small positive bump.
-//   · Weather: Open-Meteo (free, keyless) when RESTAURANT_LAT/LON env
-//     vars are set — temperature comfort and precipitation modify both
-//     total demand and the patio's share. Unset → excluded, with the
-//     exact reason shown to the manager.
-//   · Manager-declared factors (events, promotions, construction,
-//     competitor action): unknowable to the system, so they are opt-in
-//     toggles with bounded, documented multipliers.
-//   · Virality / reviews / economy / community: excluded and said so.
+//   · Weather: Open-Meteo (free, keyless) using the configured
+//     coordinates (Settings → Location, then env, then default) —
+//     temperature comfort and precipitation modify both total demand
+//     and the patio's share.
+//   · Live web research: two parallel web-search LLM calls per
+//     (location, date) covering eight signals — events, promotions,
+//     construction, competitor action (area half), plus review
+//     trajectory, social virality, discretionary-spending/tourism, and
+//     community presence (venue half). Each impact is clamped
+//     server-side (events deliberately wide — festival weekends
+//     legitimately double small-town covers); the softer venue four
+//     share an aggregate cap. A half that fails only excludes its own
+//     four aspects, with a refresh-to-retry reason. No manual declare
+//     toggles — the web research IS the source for these signals.
 //
 // POST { date?: 'YYYY-MM-DD', factors?: { event, promotion,
 //        construction, competitor } }  →  full forecast JSON.
 // ─────────────────────────────────────────────────────────────────────
 
+// Web research runs two parallel search-LLM calls with a 40s budget —
+// the route needs room beyond a default serverless timeout. Results are
+// cached (30 min), so only the first forecast of a (location, date)
+// pays the wait.
+export const maxDuration = 60;
+
 const DAY = 24 * 60 * 60 * 1000;
+
+// Single-tenant location default. Resolution order at request time:
+//   RestaurantSettings.prefs.location (edited in Settings → Location)
+//   → RESTAURANT_* env vars → this constant.
+// When the schema goes multi-restaurant this constant is removed and
+// location comes off the restaurant row; until then it means the
+// predictor's weather + live-web research work with zero configuration.
+const DEFAULT_LOCATION = {
+  name: "Volario's",
+  lat: "39.9197758",
+  lon: "-105.7904009",
+  address: "",
+};
+
 const dateStr = (d: Date) => d.toISOString().slice(0, 10);
 const median = (a: number[]) => {
   if (!a.length) return 0;
@@ -53,6 +79,37 @@ const fmtHour = (h: number) => {
   const hr = ((h + 11) % 12) + 1;
   return `${hr}${h < 12 ? "a" : "p"}`;
 };
+
+// Coordinates → "Town, State" via a keyless reverse geocoder, cached
+// for the process lifetime. This runs BEFORE the web research so the
+// search model gets a named town instead of raw coordinates — search
+// engines resolve "events in Winter Park, Colorado" perfectly and raw
+// lat/lon terribly (a mis-geocode sent the research to the wrong town).
+const geoCache = new Map<string, string | null>();
+async function reverseGeocode(lat: string, lon: string): Promise<string | null> {
+  const key = `${lat},${lon}`;
+  if (geoCache.has(key)) return geoCache.get(key) ?? null;
+  let out: string | null = null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 4000);
+  try {
+    const r = await fetch(
+      `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lon)}&localityLanguage=en`,
+      { signal: ctrl.signal }
+    );
+    if (r.ok) {
+      const j = await r.json();
+      const town = j.locality || j.city;
+      out = [town, j.principalSubdivision].filter(Boolean).join(", ") || null;
+    }
+  } catch {
+    out = null;
+  } finally {
+    clearTimeout(timer);
+  }
+  geoCache.set(key, out);
+  return out;
+}
 
 async function fetchWeather(lat: string, lon: string, date: string) {
   const ctrl = new AbortController();
@@ -88,58 +145,115 @@ async function fetchWeather(lat: string, lon: string, date: string) {
 // toggles. Requires RESTAURANT_ADDRESS (freeform street/city) and
 // optionally RESTAURANT_NAME (enables own-promotion lookup).
 type ResearchAspect = { found: boolean; summary: string; impactPct: number };
-type Research = { events: ResearchAspect; promotions: ResearchAspect; construction: ResearchAspect; competitor: ResearchAspect };
+type AspectKey = "events" | "promotions" | "construction" | "competitor" | "reviews" | "virality" | "economy" | "community";
+type Research = Partial<Record<AspectKey, ResearchAspect>>;
 const researchCache = new Map<string, { at: number; data: Research | null }>();
 const clampPct = (v: unknown, lo: number, hi: number) => Math.max(lo, Math.min(hi, Math.round(Number(v) || 0)));
 
-async function researchLocalFactors(address: string, name: string | undefined, date: string): Promise<Research | null> {
-  const key = `${address}|${date}`;
-  const hit = researchCache.get(key);
-  if (hit && Date.now() - hit.at < (hit.data ? 30 : 5) * 60 * 1000) return hit.data;
-  let data: Research | null = null;
+// Impact bounds per aspect. Events are allowed to be HUGE on purpose: a
+// town-wide festival weekend in a small mountain town legitimately
+// doubles a restaurant's covers — capping that at +20% made the whole
+// signal useless. The model is told to scale by draw and proximity; the
+// engine only guards against absurdity.
+const ASPECT_BOUNDS: Record<AspectKey, [number, number]> = {
+  events: [0, 150],
+  promotions: [0, 20],
+  construction: [-25, 0],
+  competitor: [-15, 0],
+  reviews: [-10, 10],
+  virality: [0, 25],
+  economy: [-10, 10],
+  community: [0, 10],
+};
+// The venue-side signals are softer reads, so their COMBINED swing is
+// capped — they nudge the forecast, they don't drive it.
+const SOFT_KEYS: AspectKey[] = ["reviews", "virality", "economy", "community"];
+const SOFT_AGGREGATE_CAP = 20;
+
+const RESEARCH_TIMEOUT_MS = 40_000;
+
+async function runResearchCall(prompt: string, keys: AspectKey[]): Promise<Research | null> {
   try {
     const run = generateText({
-      model: openai.responses(process.env.PREDICT_MODEL || "gpt-4o-mini"),
+      model: openai.responses(process.env.PREDICT_RESEARCH_MODEL || process.env.PREDICT_MODEL || "gpt-4o"),
       tools: { web_search: openai.tools.webSearch({}) },
-      prompt: `Research local demand factors for a restaurant for the evening of ${date}.
-Restaurant location: ${address}.${name ? ` Restaurant name: ${name}.` : ""}
-
-Use web search to check each of these, scoped to walking distance / the immediate blocks around that address on that date:
-1. events — concerts, pro or college sports games, theater, festivals, or conventions nearby that evening.
-2. construction — road closures, utility work, or parking restrictions on or near that block.
-3. competitor — new restaurant openings, grand openings, or heavily promoted specials within a few blocks.
-4. promotions — ${name ? `published promotions, happy hours, or limited-time offers currently advertised by ${name} itself.` : 'skip this one (restaurant name unknown): return found=false.'}
-
-Respond with ONLY a JSON object, no prose, no code fences:
-{"events":{"found":boolean,"summary":"one short sentence citing what/where, or 'nothing significant'","impactPct":int},
- "construction":{"found":...,"summary":...,"impactPct":int},
- "competitor":{"found":...,"summary":...,"impactPct":int},
- "promotions":{"found":...,"summary":...,"impactPct":int}}
-impactPct is your estimated effect on tonight's covers: events 0..20, promotions 0..12, construction -15..0, competitor -10..0. Use 0 when nothing significant. Never invent specifics — only report what the searches actually surfaced.`,
+      prompt,
     });
     const timed = await Promise.race([
       run,
-      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("research_timeout")), 8000)),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error("research_timeout")), RESEARCH_TIMEOUT_MS)),
     ]);
     const text = (timed as { text: string }).text || "";
-    const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
-    const norm = (o: { found?: unknown; summary?: unknown; impactPct?: unknown } | undefined, lo: number, hi: number): ResearchAspect => ({
-      found: !!o?.found,
-      summary: String(o?.summary || "").slice(0, 240),
-      impactPct: o?.found ? clampPct(o?.impactPct, lo, hi) : 0,
-    });
-    data = {
-      events: norm(parsed.events, 0, 20),
-      promotions: norm(parsed.promotions, 0, 12),
-      construction: norm(parsed.construction, -15, 0),
-      competitor: norm(parsed.competitor, -10, 0),
-    };
+    const jsonMatch = text.replace(/```json|```/g, "").match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return null;
+    // Models sometimes emit typographic minus/hyphen variants (U+2011,
+    // U+2212…) in negative numbers — normalize to ASCII before parsing.
+    const parsed = JSON.parse(jsonMatch[0].replace(/[‐-―−]/g, "-"));
+    const out: Research = {};
+    for (const k of keys) {
+      const o = parsed[k] as { found?: unknown; summary?: unknown; impactPct?: unknown } | undefined;
+      const [lo, hi] = ASPECT_BOUNDS[k];
+      out[k] = {
+        found: !!o?.found,
+        summary: String(o?.summary || "").slice(0, 240),
+        impactPct: o?.found ? clampPct(o?.impactPct, lo, hi) : 0,
+      };
+    }
+    return out;
   } catch (err) {
-    console.warn("[api/predict] research unavailable:", err instanceof Error ? err.message : err);
-    data = null;
+    console.warn("[api/predict] research call failed:", err instanceof Error ? err.message : err);
+    return null;
   }
-  researchCache.set(key, { at: Date.now(), data });
+}
+
+// Two PARALLEL focused calls — one about the surrounding area on that
+// date, one about the venue itself — each half cached independently
+// (30 min on success, 2 min on failure so a Refresh retries soon). A
+// half that fails leaves only its four aspects excluded; the other four
+// still land. All-or-nothing was how one slow search emptied the whole
+// factor panel.
+async function researchHalf(cacheKey: string, prompt: string, keys: AspectKey[]): Promise<Research | null> {
+  const hit = researchCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < (hit.data ? 30 : 2) * 60 * 1000) return hit.data;
+  const data = await runResearchCall(prompt, keys);
+  researchCache.set(cacheKey, { at: Date.now(), data });
   return data;
+}
+
+async function researchLocalFactors(location: string, name: string | undefined, date: string): Promise<Research | null> {
+  const venue = name ? `${name}, located at/near ${location}` : `the restaurant located at/near ${location}`;
+  const areaPrompt = `Research area demand factors for a restaurant for the evening of ${date}.
+Restaurant: ${venue}.
+
+First, identify the town/neighborhood those coordinates or that address sit in. Then use web search to assess each factor for THAT AREA on THAT DATE:
+1. events — festivals, concerts, pro/college sports, theater, conventions, or seasonal celebrations in or near that town that day/evening. Check the town's event calendars and ticketing sites (Eventbrite etc.).
+2. construction — road closures, utility work, or parking/access restrictions near the restaurant.
+3. competitor — new/grand openings or heavily promoted specials at nearby restaurants.
+4. promotions — ${name ? `promotions, happy hours, or limited-time offers currently advertised by ${name} itself (website, social, review sites).` : "skip (restaurant name unknown): found=false."}
+
+Respond with ONLY a JSON object, no prose, no code fences:
+{"events":{"found":boolean,"summary":"one short sentence citing the specific thing found (names, dates), or 'nothing significant'","impactPct":int},"construction":{...},"competitor":{...},"promotions":{...}}
+impactPct = estimated effect on that night's covers. Scale events by draw and proximity: a town-wide festival weekend in a small town that visibly fills the whole town = +50..150; a large single event nearby = +15..40; a modest event = +5..15. Bounds: events 0..150, promotions 0..20, construction -25..0, competitor -15..0. Use 0 when nothing significant. Never invent specifics — report only what the searches actually surfaced.`;
+
+  const venuePrompt = `Research the current standing of a specific restaurant: ${venue}. Today's context date: ${date}.
+
+Use web search to assess each of these about THIS venue right now:
+1. reviews — recent rating/review trajectory (Google, Yelp, TripAdvisor): improving, steady, or slipping; any notably good/bad recent reviews.
+2. virality — any recent viral or high-reach social-media/local-news moment (TikTok, Instagram, Reddit, press) about the restaurant or one of its dishes.
+3. economy — discretionary-spending / tourism conditions for its area around that date: tourist high/low season, local economic news, anything changing how many visitors are around and how freely they spend.
+4. community — the restaurant's local standing and buzz: beloved staple, local press coverage, community events it hosts or sponsors.
+
+Respond with ONLY a JSON object, no prose, no code fences:
+{"reviews":{"found":boolean,"summary":"one short sentence citing what you found, or 'nothing significant'","impactPct":int},"virality":{...},"economy":{...},"community":{...}}
+impactPct = estimated effect on that night's covers. Bounds: reviews -10..10, virality 0..25, economy -10..10, community 0..10. Use 0 when nothing significant. Never invent specifics — report only what the searches actually surfaced.`;
+
+  const base = `${location}|${name || ""}|${date}`;
+  const [area, venueRes] = await Promise.all([
+    researchHalf(`${base}|area`, areaPrompt, ["events", "construction", "competitor", "promotions"]),
+    researchHalf(`${base}|venue`, venuePrompt, ["reviews", "virality", "economy", "community"]),
+  ]);
+  if (!area && !venueRes) return null;
+  return { ...(area || {}), ...(venueRes || {}) };
 }
 
 export async function POST(req: Request) {
@@ -154,7 +268,6 @@ export async function POST(req: Request) {
     if (targetMs < todayMs) target = todayStr;
     if (targetMs > todayMs + 7 * DAY) target = dateStr(new Date(todayMs + 7 * DAY));
     const dow = new Date(`${target}T12:00:00Z`).getUTCDay();
-    const manual = body?.factors || {};
 
     // ── History pull ─────────────────────────────────────────────────
     const recentSince = new Date(todayMs - 130 * DAY);
@@ -163,9 +276,23 @@ export async function POST(req: Request) {
     const lyFrom = new Date(lyCenter.getTime() - 14 * DAY);
     const lyTo = new Date(lyCenter.getTime() + 14 * DAY);
 
-    const researchAddress = process.env.RESTAURANT_ADDRESS;
-    const researchP: Promise<Research | null> = researchAddress
-      ? researchLocalFactors(researchAddress, process.env.RESTAURANT_NAME, target)
+    // ── Location resolution (settings → env → default) ──────────────
+    const settingsRow = await prisma.restaurantSettings.findUnique({ where: { id: "main" } }).catch(() => null);
+    const locPref = (settingsRow?.prefs as { location?: { name?: string; lat?: string; lon?: string; address?: string } } | null)?.location || {};
+    const locName = (locPref.name || process.env.RESTAURANT_NAME || DEFAULT_LOCATION.name || "").trim() || undefined;
+    const locLat = String(locPref.lat || process.env.RESTAURANT_LAT || DEFAULT_LOCATION.lat || "").trim();
+    const locLon = String(locPref.lon || process.env.RESTAURANT_LON || DEFAULT_LOCATION.lon || "").trim();
+    const locAddress = (locPref.address || process.env.RESTAURANT_ADDRESS || "").trim();
+    // The research call needs a location descriptor. Prefer a real
+    // street address; otherwise reverse-geocode the coordinates into a
+    // named town — search engines need "Winter Park, Colorado", not a
+    // lat/lon pair.
+    const geoTown = !locAddress && locLat && locLon ? await reverseGeocode(locLat, locLon) : null;
+    const researchLocation = locAddress
+      || (geoTown ? `${geoTown} (coordinates ${locLat}, ${locLon})` : "")
+      || (locLat && locLon ? `coordinates ${locLat}, ${locLon}` : "");
+    const researchP: Promise<Research | null> = researchLocation
+      ? researchLocalFactors(researchLocation, locName, target)
       : Promise.resolve(null);
 
     const [recentRows, lastYearRows, bookRows, activeTables, servers, shiftServers] = await Promise.all([
@@ -274,7 +401,7 @@ export async function POST(req: Request) {
       mult *= 1.06;
       usedFactors.push({ key: "payday", label: "Payday cycle", detail: "date sits on a pay-cycle boundary (1st / 15th / month-end)", impactPct: 6 });
     }
-    const lat = process.env.RESTAURANT_LAT, lon = process.env.RESTAURANT_LON;
+    const lat = locLat, lon = locLon;
     let weather: { tMax: number; tMin: number; precipProb: number } | null = null;
     let patioWeatherMult = 1;
     if (lat && lon) {
@@ -291,47 +418,57 @@ export async function POST(req: Request) {
         excludedFactors.push({ key: "weather", label: "Weather", reason: "forecast service unreachable" });
       }
     } else {
-      excludedFactors.push({ key: "weather", label: "Weather", reason: "no location configured — set RESTAURANT_LAT / RESTAURANT_LON env vars" });
+      excludedFactors.push({ key: "weather", label: "Weather", reason: "no coordinates configured — set them in Settings → Location" });
     }
-    const research = await researchP;
-    if (research) {
-      const DEFS: Array<[keyof Research, string]> = [
-        ["events", "Local events (web)"],
-        ["promotions", "Active promotions (web)"],
-        ["construction", "Construction / access (web)"],
-        ["competitor", "Competitor action (web)"],
-      ];
-      for (const [k, label] of DEFS) {
+    const research = (await researchP) || {};
+    {
+      // All eight web-derived signals, applied per aspect. An aspect the
+      // research couldn't cover this run is listed as excluded with a
+      // retry hint — never silently zero. The aggregate of the softer
+      // venue-side four is clamped so a run of small positive reads
+      // can't quietly balloon the forecast — they nudge, they don't
+      // drive. Events deliberately may drive (festival weekends are
+      // real demand, bounded in ASPECT_BOUNDS).
+      const LABELS: Record<AspectKey, string> = {
+        events: "Local events (web)",
+        promotions: "Active promotions (web)",
+        construction: "Construction / access (web)",
+        competitor: "Competitor action (web)",
+        reviews: "Review platform trajectory (web)",
+        virality: "Social media virality (web)",
+        economy: "Discretionary spending / tourism (web)",
+        community: "Community presence (web)",
+      };
+      const missReason = researchLocation
+        ? "web research didn't complete this run — hit Refresh to retry"
+        : "set a location in Settings → Location to enable";
+      const HARD_KEYS: AspectKey[] = ["events", "promotions", "construction", "competitor"];
+      for (const k of HARD_KEYS) {
         const r = research[k];
+        if (!r) { excludedFactors.push({ key: k, label: LABELS[k], reason: missReason }); continue; }
         if (r.found && r.impactPct !== 0) {
           mult *= 1 + r.impactPct / 100;
-          usedFactors.push({ key: k, label, detail: r.summary, impactPct: r.impactPct });
+          usedFactors.push({ key: k, label: LABELS[k], detail: r.summary, impactPct: r.impactPct });
         } else {
-          usedFactors.push({ key: k, label, detail: `web search: ${r.summary || "nothing significant found"}`, impactPct: 0 });
+          usedFactors.push({ key: k, label: LABELS[k], detail: `web search: ${r.summary || "nothing significant found"}`, impactPct: 0 });
         }
       }
-    } else {
-      // Fallback: research unavailable — manual toggles apply, and the
-      // report says exactly what to configure.
-      const MANUAL: Record<string, { label: string; pct: number }> = {
-        event: { label: "Local event nearby", pct: 15 },
-        promotion: { label: "Active promotion / happy hour", pct: 10 },
-        construction: { label: "Construction / access friction", pct: -10 },
-        competitor: { label: "Competitor action nearby", pct: -7 },
-      };
-      for (const [k, def] of Object.entries(MANUAL)) {
-        if (manual[k]) { mult *= 1 + def.pct / 100; usedFactors.push({ key: k, label: def.label, detail: "declared by manager", impactPct: def.pct }); }
+      // Soft signals: sum, clamp the combined swing, apply once — the
+      // report still shows each finding individually (scaled).
+      let softSum = 0;
+      for (const k of SOFT_KEYS) { const r = research[k]; if (r?.found) softSum += r.impactPct; }
+      const softClamped = Math.max(-SOFT_AGGREGATE_CAP, Math.min(SOFT_AGGREGATE_CAP, softSum));
+      const softScale = softSum !== 0 ? softClamped / softSum : 1;
+      for (const k of SOFT_KEYS) {
+        const r = research[k];
+        if (!r) { excludedFactors.push({ key: k, label: LABELS[k], reason: missReason }); continue; }
+        if (r.found && r.impactPct !== 0) {
+          usedFactors.push({ key: k, label: LABELS[k], detail: r.summary, impactPct: Math.round(r.impactPct * softScale) });
+        } else {
+          usedFactors.push({ key: k, label: LABELS[k], detail: `web search: ${r.summary || "nothing significant found"}`, impactPct: 0 });
+        }
       }
-      excludedFactors.push({
-        key: "research",
-        label: "Live web research (events / promos / construction / competitor)",
-        reason: researchAddress
-          ? "search failed or timed out — manual toggles apply this run"
-          : "set RESTAURANT_ADDRESS (and optionally RESTAURANT_NAME) env vars to enable",
-      });
-    }
-    for (const [k, label] of [["virality", "Social media virality"], ["reviews", "Review platform trajectory"], ["economy", "Discretionary spending trends"], ["community", "Community presence"]] as const) {
-      excludedFactors.push({ key: k, label, reason: "not tracked by the system" });
+      if (softClamped !== 0) mult *= 1 + softClamped / 100;
     }
 
     // ── The book for the target date ─────────────────────────────────
@@ -464,7 +601,7 @@ export async function POST(req: Request) {
 
     return Response.json({
       date: target, dow, isToday, generatedAt: new Date().toISOString(),
-      historyDays, research: !!research,
+      historyDays, research: Object.keys(research).length > 0,
       covers: { expected, low: Math.round(expected * (1 - band)), high: Math.round(expected * (1 + band)), confidence, method: method || "reservation book + walk-in floor (no history)" },
       booked: { covers: bookedCovers, parties: bookRows.length, showRate: Math.round(showRate * 100) },
       walkIns: { expected: expectedWalkIns, historicalSharePct: Math.round(walkShareHist * 100) },
