@@ -463,9 +463,8 @@ function ServerRow({ server, onToggle, onShiftToggle = null, onAiLockToggle = nu
         <span className={`text-[13px] truncate ${on ? "text-white font-medium" : "text-gray-300"}`}>
           {server.name}
         </span>
-        {/* AI-exclusion lock — same idiom as the floor tabs: 🔒 when the
-            server is dedicated (private room / VIP) and invisible to the
-            auto-assigner; 🔓 appears on row hover to toggle. */}
+        {/* AI-exclusion badge: the lock is reserved for online-booking
+            blocks, so dedicated service uses the red AI prohibition mark. */}
         {onAiLockToggle && (
           <span
             onClick={(e) => { e.stopPropagation(); onAiLockToggle(server.id, !server.aiExcluded); }}
@@ -477,7 +476,7 @@ function ServerRow({ server, onToggle, onShiftToggle = null, onAiLockToggle = nu
               : 'Click to exclude from AI auto-assign (dedicated service)'}
             role="button"
             aria-label="Toggle AI exclusion"
-          >{server.aiExcluded ? '🔒' : '🔓'}</span>
+          >{server.aiExcluded ? 'AI⊘' : 'AI'}</span>
         )}
         {/* Role tag — only renders for bartenders, and only where the
             row is shown in a bartender context (showBarTag). The waiter
@@ -1090,14 +1089,14 @@ function FloorMap({
   editMode, setEditMode, mergeMode, setMergeMode, mergeSelection, setMergeSelection,
   newCapacity, setNewCapacity, newTableShape = 'square', setNewTableShape, newTableArea = 'dining', setNewTableArea, addTable, deleteTable,
   dragState, setDragState, moveSourceId, setMoveSourceId,
-  attemptSeat, clearTable, now, aiSuggestedIds = [], aiSuggestedRawId = null,
+  attemptSeat, clearTable, moveParty = null, now, aiSuggestedIds = [], aiSuggestedRawId = null,
   servers = [], isAssignMode = false, assignSelectedServer = null, assignTableToServer, setIsAssignMode, setAssignSelectedServer, viewingServerId = null, setViewingServerId, sectionView = false, setSectionView,
   reassignReservationId = null, setReassignReservationId, updateReservationTable, assignReservationToTables, onAssignConflictPrompt,
   floors = [{ id: 'f1', name: 'Main Floor', isManualOnly: false }], setFloors, activeFloorId = 'f1', setActiveFloorId,
   underlay = null, showUnderlay = false, setShowUnderlay = () => {}, migrationActive = false, onCancelMigration = () => {},
   isAddingFloor = false, setIsAddingFloor, newFloorName = "", setNewFloorName, deleteFloor,
   rotateTable, renameTable, setTableCapacity, setTableShape = null, setTableArea = null, renameFloor = () => {}, reorderFloors = null, toggleTableManualOnly = null, toggleTableOnlineExcluded = null, toggleFloorManualOnly = () => {}, toggleFloorOnlineExcluded = () => {}, setFloorTablesManualOnly = () => {}, setFloorTablesOnlineExcluded = () => {}, addFloor, undo, canUndo = false,
-  hostMode = false,
+  hostMode = false, serviceLogOpen = false, onToggleServiceLog = null,
 }) {
   // Visible tables — only the active floor's tables are rendered, drag-
   // tested, and grouped. Lookups by id (selectedTable, dragState target,
@@ -1174,6 +1173,10 @@ function FloorMap({
   // preventDefault() must actually stop Safari's page-level pan/zoom.
   // The canvas also sets touch-action:none so iOS never argues.
   useEffect(() => {
+    // The manager view retains its established immediate touch pan. Host
+    // uses the pointer-intent classifier below so a horizontal swipe is
+    // never mistaken for panning.
+    if (hostMode) return undefined;
     const el = document.getElementById('floor-canvas');
     if (!el) return;
     let gesture = null; // { mode: 'pan'|'pinch', ... }
@@ -1214,7 +1217,7 @@ function FloorMap({
         const [a, b] = [e.touches[0], e.touches[1]];
         const rect = el.getBoundingClientRect();
         const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1;
-        const next = Math.max(0.4, Math.min(2, gesture.zoom * (dist / gesture.dist)));
+        const next = clampZoom(gesture.zoom * (dist / gesture.dist));
         const midX = (a.clientX + b.clientX) / 2 - rect.left;
         const midY = (a.clientY + b.clientY) / 2 - rect.top;
         // Keep the world point that was under the pinch midpoint pinned
@@ -1245,7 +1248,59 @@ function FloorMap({
       el.removeEventListener('touchend', onTouchEnd);
       el.removeEventListener('touchcancel', onTouchEnd);
     };
-  }, []);
+  }, [hostMode]);
+  // Host-only pointer intent model: quick, decisive horizontal movement
+  // changes rooms; otherwise a held press becomes a pan after 500ms.
+  // Pointer events leave two-finger pinch behavior to the browser/current
+  // touch path and never engage on a tile, guest drag, or edit action.
+  useEffect(() => {
+    if (!hostMode) return undefined;
+    const el = document.getElementById('floor-canvas');
+    if (!el) return undefined;
+    let active = null;
+    const blocked = (target) => target?.closest?.('[data-table-tile], [data-edit-popup], [data-floor-controls], [data-floor-tab], button, input, select, [data-party-drag-ghost]');
+    const finish = () => {
+      if (!active) return;
+      clearTimeout(active.timer);
+      active = null;
+    };
+    const onPointerDown = (e) => {
+      if (e.pointerType !== 'touch' || e.isPrimary === false || blocked(e.target) || dragState || document.querySelector('[data-party-drag-ghost]')) return;
+      const origin = { x: e.clientX, y: e.clientY };
+      active = { id: e.pointerId, origin, pan: { ...panRef.current }, mode: 'pending', timer: 0, lastX: e.clientX, lastT: performance.now() };
+      active.timer = window.setTimeout(() => {
+        if (active && active.id === e.pointerId && active.mode === 'pending') active.mode = 'pan';
+      }, 500);
+      el.setPointerCapture?.(e.pointerId);
+    };
+    const onPointerMove = (e) => {
+      if (!active || active.id !== e.pointerId) return;
+      const dx = e.clientX - active.origin.x, dy = e.clientY - active.origin.y;
+      const elapsed = Math.max(1, performance.now() - active.lastT);
+      const velocity = Math.abs(e.clientX - active.lastX) / elapsed;
+      active.lastX = e.clientX; active.lastT = performance.now();
+      if (active.mode === 'pending' && Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy) && velocity > 0.25) {
+        active.mode = 'swipe'; clearTimeout(active.timer); e.preventDefault();
+        const index = floors.findIndex(f => f.id === activeFloorId);
+        if (index >= 0 && floors.length > 1) {
+          const next = floors[(index + (dx < 0 ? 1 : floors.length - 1)) % floors.length];
+          setActiveFloorId(next.id); setSelectedTableId(null); setMoveSourceId && setMoveSourceId(null); setMergeSelection([]);
+        }
+        return;
+      }
+      if (active.mode === 'pan') {
+        e.preventDefault(); panMovedRef.current = true;
+        const np = { x: active.pan.x + dx, y: active.pan.y + dy };
+        panRef.current = np; setPan(np);
+      }
+    };
+    const onPointerUp = (e) => { if (active?.id === e.pointerId) finish(); };
+    el.addEventListener('pointerdown', onPointerDown, { passive: true });
+    el.addEventListener('pointermove', onPointerMove, { passive: false });
+    el.addEventListener('pointerup', onPointerUp, { passive: true });
+    el.addEventListener('pointercancel', onPointerUp, { passive: true });
+    return () => { finish(); el.removeEventListener('pointerdown', onPointerDown); el.removeEventListener('pointermove', onPointerMove); el.removeEventListener('pointerup', onPointerUp); el.removeEventListener('pointercancel', onPointerUp); };
+  }, [hostMode, floors, activeFloorId, dragState, setActiveFloorId, setMergeSelection, setMoveSourceId, setSelectedTableId]);
   const startPan = (e) => {
     // Only pan on a plain background press (left button, not on a tile).
     if (e.button !== 0) return;
@@ -1279,7 +1334,7 @@ function FloorMap({
     // written in the same tick, so rapid wheel bursts between renders
     // still compound correctly.
     const z = zoomRef.current || 1;
-    const next = Math.max(0.4, Math.min(2, +(z + dir * step).toFixed(3)));
+    const next = clampZoom(+(z + dir * step).toFixed(3));
     if (next === z) return;
     const p = panRef.current;
     const np = {
@@ -1312,7 +1367,7 @@ function FloorMap({
     });
     const pad = 60;
     const cw = maxX - minX + pad * 2, ch = maxY - minY + pad * 2;
-    const z = Math.max(0.4, Math.min(1.5, Math.min(r.width / cw, r.height / ch)));
+    const z = Math.max(0.05, Math.min(1.5, Math.min(r.width / cw, r.height / ch)));
     // Center the content bbox in the viewport.
     const cxWorld = (minX + maxX) / 2, cyWorld = (minY + maxY) / 2;
     const np = { x: r.width / 2 - cxWorld * z, y: r.height / 2 - cyWorld * z };
@@ -1424,7 +1479,23 @@ function FloorMap({
   }, [activeFloorId]);
 
   const panDragRef = useRef(null);
-  const clampZoom = (z) => Math.max(0.4, Math.min(2, Math.round(z * 100) / 100));
+  // "0%" means fit-to-floor, never a literal zero transform. This keeps
+  // the entire active room reachable while retaining a tiny 5% safety floor
+  // for sparse/oversized imported plans.
+  const minimumZoom = () => {
+    const el = document.getElementById('floor-canvas');
+    if (!el || visibleTables.length === 0) return 0.05;
+    const r = el.getBoundingClientRect();
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    visibleTables.forEach(t => {
+      const s = getTableSizePx(t.shape, t.capacity);
+      minX = Math.min(minX, t.x); minY = Math.min(minY, t.y);
+      maxX = Math.max(maxX, t.x + s.width); maxY = Math.max(maxY, t.y + s.height);
+    });
+    const fit = Math.min(r.width / Math.max(1, maxX - minX + 120), r.height / Math.max(1, maxY - minY + 120));
+    return Math.max(0.05, Math.min(2, fit));
+  };
+  const clampZoom = (z) => Math.max(minimumZoom(), Math.min(2, Math.round(z * 100) / 100));
   const commitNumber = (id) => {
     const v = numberDraft.trim();
     if (v) {
@@ -1797,6 +1868,19 @@ function FloorMap({
       if (setReassignReservationId) setReassignReservationId(null);
       return;
     }
+    // Move-party mode reuses the same table-pick surface, but keeps the
+    // seated lifecycle record intact: only its live table association is
+    // changed, so the service journal never receives a second seating.
+    if (moveSourceId) {
+      const source = tables.find(t => t.id === moveSourceId);
+      if (!source || table.status !== 'available' || table.id === source.id) return;
+      const party = source.party;
+      const partySize = source.partySize;
+      if (!party || !partySize || getEffectiveCapacity(table, tables) < partySize) return;
+      if (moveParty) moveParty(source, table);
+      setMoveSourceId(null); setSelectedTableId(table.id);
+      return;
+    }
     if (editMode) return;
     if (dragState) return;
     // Section Assignment hijack: when isAssignMode is true and a server
@@ -2010,7 +2094,7 @@ function FloorMap({
                   : ''
               }`}
             >
-              {f.name}{f.isManualOnly && !(editMode && activeFloorId === f.id) && ' 🔒'}
+              {f.name}{f.onlineExcluded && ' 🔒'}{f.isManualOnly && !(editMode && activeFloorId === f.id) && <span className="ml-1 text-rose-400" title="Excluded from AI">AI⊘</span>}
               {/* Floor ⋮ menu stays in host mode: blocking a floor or
                   table from online booking / AI assignment is shift-time
                   host work (a private party, a closed section), not a
@@ -2044,7 +2128,7 @@ function FloorMap({
                   title={f.isManualOnly ? 'Manual-only floor (AI excluded) — click to include' : 'Click to exclude this whole floor from AI'}
                   role="button"
                   aria-label="Toggle manual-only floor"
-                >{f.isManualOnly ? '🔒' : '🔓'}</span>
+                >{f.isManualOnly ? 'AI⊘' : 'AI'}</span>
               )}
             </button>
             )
@@ -2227,11 +2311,14 @@ function FloorMap({
         {/* Floor zoom controls — live in the toolbar so they never cover
             tables. Wheel-zoom works anywhere on the canvas too. */}
         <div data-floor-controls className="ml-auto flex items-center gap-1 bg-panel-card border border-border-hi rounded-lg px-1.5 py-1" onMouseDown={(e) => e.stopPropagation()}>
-          <button onClick={() => zoomStep(-1)} disabled={zoom <= 0.4001} className="w-7 h-7 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel disabled:opacity-30 text-base font-bold leading-none transition-colors" title="Zoom out" aria-label="Zoom out">&minus;</button>
-          <span className="w-10 text-center font-mono text-[10px] text-ink-400 tabular-nums select-none">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => zoomStep(1)} disabled={zoom >= 1.9999} className="w-7 h-7 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel disabled:opacity-30 text-base font-bold leading-none transition-colors" title="Zoom in" aria-label="Zoom in">+</button>
+          <button onClick={() => zoomStep(-1)} disabled={zoom <= minimumZoom() + 0.001} className="w-11 h-11 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel disabled:opacity-30 text-xl font-bold leading-none transition-colors" title="Zoom out" aria-label="Zoom out">&minus;</button>
+          <span className="w-10 text-center font-mono text-[10px] text-ink-400 tabular-nums select-none">{zoom <= minimumZoom() + 0.001 ? '0%' : `${Math.round(zoom * 100)}%`}</span>
+          <button onClick={() => zoomStep(1)} disabled={zoom >= 1.9999} className="w-11 h-11 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel disabled:opacity-30 text-xl font-bold leading-none transition-colors" title="Zoom in" aria-label="Zoom in">+</button>
           <div className="w-px h-4 bg-border mx-0.5" />
-          <button onClick={fitView} className="px-2 h-7 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel font-mono text-[9px] uppercase tracking-[0.08em] font-bold transition-colors" title="Fit all tables" aria-label="Fit all tables">Fit</button>
+          <button onClick={fitView} className="px-2 min-w-11 h-11 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel font-mono text-[9px] uppercase tracking-[0.08em] font-bold transition-colors" title="Fit all tables" aria-label="Fit all tables">Fit</button>
+          {hostMode && onToggleServiceLog && (
+            <button onClick={onToggleServiceLog} className={`ml-3 min-w-11 h-11 rounded-md flex items-center justify-center px-2 font-mono text-[9px] uppercase tracking-[0.08em] font-bold transition-colors ${serviceLogOpen ? 'bg-ai/15 text-ai' : 'text-ink-300 hover:text-ink-50 hover:bg-panel'}`} title="Toggle service log" aria-label="Toggle service log">Log</button>
+          )}
           {editMode && underlay && (
             <button
               onClick={() => setShowUnderlay(v => !v)}
@@ -2517,6 +2604,12 @@ function FloorMap({
                     {t.area}
                   </span>
                 )}
+                {(t.onlineExcluded || t.manualOnly) && (
+                  <div className="absolute -top-2 -right-2 flex items-center gap-0.5 pointer-events-none" aria-label="Table restrictions">
+                    {t.onlineExcluded && <span className="min-w-4 h-4 px-0.5 rounded-full bg-panel-card border border-border-hi text-[10px] leading-[14px] text-ink-50" title="Online reservations blocked">🔒</span>}
+                    {t.manualOnly && <span className="min-w-4 h-4 px-0.5 rounded-full bg-rose-950 border border-rose-400/70 text-[7px] leading-[14px] font-bold text-rose-300" title="Excluded from AI">AI⊘</span>}
+                  </div>
+                )}
                 {/* Capacity (above) + name (below). Capacity reads as
                     a small muted label so the name is the focal text;
                     flipped from the previous order to keep the bottom
@@ -2701,7 +2794,7 @@ function FloorMap({
                           : 'bg-panel text-ink-300 border-border hover:text-ink-50'
                       }`}
                       title={pt.manualOnly ? 'Excluded from AI auto-assign — click to include' : 'Included in AI auto-assign — click to exclude'}
-                    >{pt.manualOnly ? '🔒 Manual only' : 'AI included'}</button>
+                    >{pt.manualOnly ? 'AI⊘ Excluded' : 'AI included'}</button>
                   </div>
                   {/* Change table number — sits under the seat control */}
                   <div className="flex items-center justify-between gap-3">
@@ -6771,14 +6864,14 @@ function SeatingAssistRail({ aiThinking, selectedPartyId, reassignReservationId,
   );
 }
 
-function ServiceRail({ serviceLog, now, onOpenTable, dateLabel = null }) {
+function ServiceRail({ serviceLog, now, onOpenTable, dateLabel = null, onClose = null, overlay = false }) {
   if (!serviceLog) return null;
   const { covers, seated, history } = serviceLog;
   return (
-    <aside className="w-[248px] flex-shrink-0 border-l border-border-hi bg-panel flex flex-col overflow-hidden">
+    <aside className={`${overlay ? 'absolute inset-y-0 right-0 z-30 w-[min(320px,88vw)] shadow-2xl animate-[mesa-rail-in_0.2s_ease-out]' : 'w-[248px] flex-shrink-0'} border-l border-border-hi bg-panel flex flex-col overflow-hidden`}>
       <div className="px-3 py-2.5 border-b border-border-hi flex items-baseline justify-between flex-shrink-0">
         <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-400">Service log</span>
-        <span className="font-mono text-[11px] text-ink-50 tabular-nums">{covers.total} <span className="text-ink-400">covers</span></span>
+        <div className="flex items-center gap-2"><span className="font-mono text-[11px] text-ink-50 tabular-nums">{covers.total} <span className="text-ink-400">covers</span></span>{onClose && <button onClick={onClose} className="w-11 h-11 -mr-2 flex items-center justify-center text-xl text-ink-400 hover:text-ink-50" aria-label="Close service log">×</button>}</div>
       </div>
       {dateLabel && (
         <div className="px-3 py-1.5 border-b border-border-hi font-mono text-[9px] uppercase tracking-[0.1em] text-ai flex-shrink-0">{dateLabel}</div>
@@ -6845,7 +6938,7 @@ function ServiceView({ serviceLog, now, onRefresh, onOpenTable, dateLabel = null
   );
 }
 
-function TableDetailsPanel({ table, servers, now, reservations = [], shiftWindow = null, viewDateStr = null, onClose, onMarkBussing, onClearTable, onOpenReservation, onEditParty, setMergeMode, setMergeSelection, unmergeTable }) {
+function TableDetailsPanel({ table, servers, now, reservations = [], shiftWindow = null, viewDateStr = null, onClose, onMarkBussing, onClearTable, onOpenReservation, onEditParty, onMoveParty, onToggleAiExcluded, onToggleOnlineBlocked, setMergeMode, setMergeSelection, unmergeTable, overlay = false }) {
   if (!table) return null;
 
   const assignedServer = servers.find(s => s.id === table.assignedServerId);
@@ -6923,7 +7016,7 @@ function TableDetailsPanel({ table, servers, now, reservations = [], shiftWindow
   const canClear       = isOccupied || isBussing;  // Reserved isn't "cleared" — use a different flow for that
 
   return (
-    <aside className="w-80 bg-panel border-l border-border p-4 flex flex-col flex-shrink-0 overflow-y-auto">
+    <aside className={`${overlay ? 'fixed inset-y-0 right-0 z-40 w-[min(320px,88vw)] shadow-2xl animate-[mesa-rail-in_0.2s_ease-out]' : 'w-80 flex-shrink-0'} bg-panel border-l border-border p-4 flex flex-col overflow-y-auto`}>
       {/* Header — title + mini status line + close */}
       <div className="flex items-start justify-between mb-4">
         <div className="min-w-0">
@@ -6993,6 +7086,9 @@ function TableDetailsPanel({ table, servers, now, reservations = [], shiftWindow
 
       {/* Actions — sit naturally beneath vitals with a modest gap */}
       <div className="mt-6 space-y-1.5">
+        {isOccupied && onMoveParty && (
+          <button onClick={() => onMoveParty(table)} className="w-full px-3 py-1.5 rounded-lg bg-transparent border border-ai/50 text-ai text-sm font-medium hover:bg-ai/10 transition-colors">Move party</button>
+        )}
         {isOccupied && onEditParty && (
           <button
             onClick={() => onEditParty(table)}
@@ -7000,6 +7096,12 @@ function TableDetailsPanel({ table, servers, now, reservations = [], shiftWindow
           >
             <span className="text-[13px] leading-none">✎</span> Edit party / covers
           </button>
+        )}
+        {onToggleAiExcluded && (
+          <button onClick={() => onToggleAiExcluded(table.id)} className={`w-full px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${table.manualOnly ? 'bg-rose-500/10 border-rose-400/60 text-rose-300' : 'bg-transparent border-border-hi text-ink-50 hover:bg-panel-up'}`}>AI⊘ Exclude from AI</button>
+        )}
+        {onToggleOnlineBlocked && (
+          <button onClick={() => onToggleOnlineBlocked(table.id)} className={`w-full px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${table.onlineExcluded ? 'bg-amber-500/10 border-amber-400/60 text-amber-200' : 'bg-transparent border-border-hi text-ink-50 hover:bg-panel-up'}`}>🔒 Block Online Reservations</button>
         )}
         <button
           onClick={onMarkBussing}
@@ -7871,6 +7973,7 @@ export default function Home({ hostMode = false } = {}) {
   const [sectionView,          setSectionView]          = useState(false);
   const [forceSeatTarget,  setForceSeatTarget]  = useState(null);
   const [dragState,        setDragState]        = useState(null);
+  const [hostServiceLogOpen, setHostServiceLogOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [migrateOpen, setMigrateOpen] = useState(false);
   // Pre-migration snapshot; non-null = a migration awaits Keep/Cancel.
@@ -7958,6 +8061,7 @@ export default function Home({ hostMode = false } = {}) {
   // the original form used by handleTableClick to reconstruct the merge
   // intent when the host clicks any pulsing base table.
   const [aiSuggestedRawId, setAiSuggestedRawId] = useState(null);
+  const [forcedSeatSuggestion, setForcedSeatSuggestion] = useState(null);
   const [aiReason,       setAiReason]       = useState("");
 
   useEffect(() => {
@@ -8071,6 +8175,16 @@ export default function Home({ hostMode = false } = {}) {
 
   // ─── AI Seating Agent — fetch on party selection OR reassign mode ─
   useEffect(() => {
+    // A reservation's assigned table is a deliberate host suggestion,
+    // not an auto-commit. Keep it glowing without replacing it via AI.
+    const forced = forcedSeatSuggestion && forcedSeatSuggestion.partyId === selectedPartyId ? forcedSeatSuggestion : null;
+    if (forced) {
+      setAiThinking(false);
+      setAiReason('Assigned table');
+      setAiSuggestedIds(splitTableIds(forced.tableId));
+      setAiSuggestedRawId(forced.tableId);
+      return undefined;
+    }
     // Clear previous AI state whenever the party selection changes
     setAiSuggestedIds([]);
     setAiReason("");
@@ -8207,7 +8321,7 @@ export default function Home({ hostMode = false } = {}) {
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPartyId, reassignReservationId]);
+  }, [selectedPartyId, reassignReservationId, forcedSeatSuggestion]);
 
   // ─── View mode auto-dismiss ──────────────────────────────────────
   // While a server's tables are being highlighted (viewingServerId set),
@@ -8294,7 +8408,7 @@ export default function Home({ hostMode = false } = {}) {
   // ── Touch drag-to-seat (iPad) ───────────────────────────────────────
   // HTML5 drag-and-drop is mouse-first and inconsistent under touch, so
   // coarse-pointer devices get a hand-rolled equivalent: press-and-hold
-  // a party row (~350ms — a quick tap still opens Party Details), a
+  // a party row (450ms — a quick tap still opens Party Details), a
   // floating chip lifts under the finger, tables highlight as the finger
   // passes over them, and lifting over a table seats the party through
   // the exact same onSeatPartyDrop path the mouse uses. The pre-
@@ -8375,7 +8489,7 @@ export default function Home({ hostMode = false } = {}) {
       window.addEventListener('touchmove', onMove, { passive: false });
       window.addEventListener('touchend', onEnd, { passive: false });
       window.addEventListener('touchcancel', onCancel, { passive: true });
-    }, 350);
+    }, 450);
   };
 
   const onSeatPartyDrop = (partyId, tableId) => {
@@ -8513,6 +8627,21 @@ export default function Home({ hostMode = false } = {}) {
       .join(' + ');
     setToastOk(isForce ? `Force-seated ${party.name} at ${seatLabel}` : `Seated ${party.name} at ${seatLabel}`);
     setSelectedPartyId(null);
+    setForcedSeatSuggestion(null);
+  };
+
+  const moveParty = (source, destination) => {
+    const sourceIds = source.groupId
+      ? new Set(tables.filter(t => t.groupId === source.groupId).map(t => t.id))
+      : new Set([source.id]);
+    setTables(prev => prev.map(t => {
+      if (sourceIds.has(t.id)) return { ...t, status: 'available', party: null, partySize: null, startedAt: null, groupId: null, seatedPartyId: null };
+      if (t.id === destination.id) return { ...t, status: 'seated', party: source.party, partySize: source.partySize, startedAt: source.startedAt, seatedPartyId: source.seatedPartyId || null };
+      return t;
+    }));
+    persist('/api/service-log', 'PATCH', { partyId: source.seatedPartyId, name: source.party, fromTableId: source.id, toTableId: destination.id });
+    scheduleServiceLogRefresh();
+    setToastOk(`Moved ${source.party} to ${destination.name}`);
   };
 
   // ─── Quick Walk-In — co-pilot: park in waitlist, let the seating ─
@@ -9573,9 +9702,9 @@ export default function Home({ hostMode = false } = {}) {
         }} reservationsDisabled={viewingPast} walkInDisabled={viewingPast || viewingFuture} now={now} aiReason={aiReason} servers={viewServers} staffReadOnly={viewingPast} onPartyDragStart={onPartyDragStart} onPartyDragEnd={onPartyDragEnd} onPartyTouchStart={beginPartyTouchDrag} partyRowsDraggable={!coarsePointer} addServer={addServer} toggleServerShift={toggleServerShift} setServerAiExcluded={setServerAiExcluded} isAssignMode={isAssignMode} setIsAssignMode={setIsAssignMode} assignSelectedServer={assignSelectedServer} setAssignSelectedServer={setAssignSelectedServer} handleAIAssign={handleAIAssign} aiAssignLoading={aiAssignLoading} setEditMode={setEditMode} setMergeMode={setMergeMode} setMergeSelection={setMergeSelection} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} />
         )}
         <main className="flex-1 flex flex-col overflow-hidden">
-          {activeTab === "floor" && (<div className="flex-1 flex overflow-hidden min-h-0"><FloorMap hostMode={hostMode} hydrated={hydrated} onSeatPartyDrop={onSeatPartyDrop} tables={viewTables} selectedTableId={selectedTableId} setSelectedTableId={setSelectedTableId} setSelectedReservationId={setSelectedReservationId} selectedPartyId={selectedPartyId} setSelectedPartyId={setSelectedPartyId} waitlist={waitlist} reservations={viewDateReservations} allReservations={reservations} viewDate={viewDate} setViewDate={setViewDate} editMode={editMode} setEditMode={setEditMode} mergeMode={mergeMode} setMergeMode={setMergeMode} mergeSelection={mergeSelection} setMergeSelection={setMergeSelection} newCapacity={newCapacity} setNewCapacity={setNewCapacity} addTable={addTable} deleteTable={deleteTable} rotateTable={rotateTable} renameTable={renameTable} setTableCapacity={setTableCapacity} setTableShape={setTableShape} setTableArea={setTableArea} renameFloor={renameFloor} reorderFloors={reorderFloors} toggleTableManualOnly={toggleTableManualOnly} toggleTableOnlineExcluded={toggleTableOnlineExcluded} toggleFloorManualOnly={toggleFloorManualOnly} toggleFloorOnlineExcluded={toggleFloorOnlineExcluded} setFloorTablesManualOnly={setFloorTablesManualOnly} setFloorTablesOnlineExcluded={setFloorTablesOnlineExcluded} addFloor={addFloor} undo={undo} canUndo={editHistory.length > 0} dragState={dragState} setDragState={setDragState} moveSourceId={moveSourceId} setMoveSourceId={setMoveSourceId} attemptSeat={attemptSeat} clearTable={clearTable} now={now} aiSuggestedIds={aiSuggestedIds} aiSuggestedRawId={aiSuggestedRawId} servers={viewServers} isAssignMode={isAssignMode} assignSelectedServer={assignSelectedServer} assignTableToServer={assignTableToServer} setIsAssignMode={setIsAssignMode} setAssignSelectedServer={setAssignSelectedServer} viewingServerId={viewingServerId} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} newTableShape={newTableShape} setNewTableShape={setNewTableShape} newTableArea={newTableArea} setNewTableArea={setNewTableArea} reassignReservationId={reassignReservationId} setReassignReservationId={setReassignReservationId} updateReservationTable={updateReservationTable} assignReservationToTables={assignReservationToTables} onAssignConflictPrompt={(p) => setAssignOverride(p)} floors={floors} setFloors={setFloors} activeFloorId={activeFloorId} setActiveFloorId={setActiveFloorId} isAddingFloor={isAddingFloor} setIsAddingFloor={setIsAddingFloor} newFloorName={newFloorName} setNewFloorName={setNewFloorName} underlay={floorUnderlays[activeFloorId] || null} showUnderlay={showUnderlay} setShowUnderlay={setShowUnderlay} migrationActive={!!migrationBackup} onCancelMigration={cancelFloorMigration} deleteFloor={deleteFloor} />{!editMode && (((selectedPartyId || reassignReservationId) && !mergeMode)
+          {activeTab === "floor" && (<div className="flex-1 flex overflow-hidden min-h-0 relative"><FloorMap hostMode={hostMode} serviceLogOpen={hostServiceLogOpen} onToggleServiceLog={() => setHostServiceLogOpen(v => !v)} hydrated={hydrated} onSeatPartyDrop={onSeatPartyDrop} tables={viewTables} selectedTableId={selectedTableId} setSelectedTableId={setSelectedTableId} setSelectedReservationId={setSelectedReservationId} selectedPartyId={selectedPartyId} setSelectedPartyId={setSelectedPartyId} waitlist={waitlist} reservations={viewDateReservations} allReservations={reservations} viewDate={viewDate} setViewDate={setViewDate} editMode={editMode} setEditMode={setEditMode} mergeMode={mergeMode} setMergeMode={setMergeMode} mergeSelection={mergeSelection} setMergeSelection={setMergeSelection} newCapacity={newCapacity} setNewCapacity={setNewCapacity} addTable={addTable} deleteTable={deleteTable} rotateTable={rotateTable} renameTable={renameTable} setTableCapacity={setTableCapacity} setTableShape={setTableShape} setTableArea={setTableArea} renameFloor={renameFloor} reorderFloors={reorderFloors} toggleTableManualOnly={toggleTableManualOnly} toggleTableOnlineExcluded={toggleTableOnlineExcluded} toggleFloorManualOnly={toggleFloorManualOnly} toggleFloorOnlineExcluded={toggleFloorOnlineExcluded} setFloorTablesManualOnly={setFloorTablesManualOnly} setFloorTablesOnlineExcluded={setFloorTablesOnlineExcluded} addFloor={addFloor} undo={undo} canUndo={editHistory.length > 0} dragState={dragState} setDragState={setDragState} moveSourceId={moveSourceId} setMoveSourceId={setMoveSourceId} attemptSeat={attemptSeat} clearTable={clearTable} moveParty={moveParty} now={now} aiSuggestedIds={aiSuggestedIds} aiSuggestedRawId={aiSuggestedRawId} servers={viewServers} isAssignMode={isAssignMode} assignSelectedServer={assignSelectedServer} assignTableToServer={assignTableToServer} setIsAssignMode={setIsAssignMode} setAssignSelectedServer={setAssignSelectedServer} viewingServerId={viewingServerId} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} newTableShape={newTableShape} setNewTableShape={setNewTableShape} newTableArea={newTableArea} setNewTableArea={setNewTableArea} reassignReservationId={reassignReservationId} setReassignReservationId={setReassignReservationId} updateReservationTable={updateReservationTable} assignReservationToTables={assignReservationToTables} onAssignConflictPrompt={(p) => setAssignOverride(p)} floors={floors} setFloors={setFloors} activeFloorId={activeFloorId} setActiveFloorId={setActiveFloorId} isAddingFloor={isAddingFloor} setIsAddingFloor={setIsAddingFloor} newFloorName={newFloorName} setNewFloorName={setNewFloorName} underlay={floorUnderlays[activeFloorId] || null} showUnderlay={showUnderlay} setShowUnderlay={setShowUnderlay} migrationActive={!!migrationBackup} onCancelMigration={cancelFloorMigration} deleteFloor={deleteFloor} />{!editMode && (((selectedPartyId || reassignReservationId) && !mergeMode)
             ? <SeatingAssistRail aiThinking={aiThinking} selectedPartyId={selectedPartyId} reassignReservationId={reassignReservationId} reservations={reservations} waitlist={waitlist} tables={tables} aiSuggestedIds={aiSuggestedIds} onMerge={() => { setMergeMode(true); setMergeSelection([]); }} onCancel={() => { setSelectedPartyId(null); setReassignReservationId(null); }} />
-            : <ServiceRail serviceLog={serviceLog} now={now} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />)}</div>)}
+            : (hostMode ? (hostServiceLogOpen && <ServiceRail overlay serviceLog={serviceLog} now={now} onOpenTable={openSeatedTable} onClose={() => setHostServiceLogOpen(false)} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />) : <ServiceRail serviceLog={serviceLog} now={now} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />))}</div>)}
           {activeTab === "service" && <ServiceView serviceLog={serviceLog} now={now} onRefresh={loadServiceLog} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />}
           {activeTab === "timeline" && <TimelineView reservations={todaysReservations} restaurantHours={restaurantHours} onSelectReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} />}
           {activeTab === "waitlist" && <WaitlistView waitlist={waitlist} reservations={todaysReservations} now={now} onSeatParty={seatFromWaitlist} onOpenReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} onDeleteParty={(id) => requestDelete('waitlist', id)} />}
@@ -9616,6 +9745,10 @@ export default function Home({ hostMode = false } = {}) {
             onClose={() => setSelectedTableId(null)}
             onMarkBussing={() => markForBussing(selectedTableId)}
             onClearTable={() => clearTable(selectedTableId)}
+            onMoveParty={(t) => { setMoveSourceId(t.id); setSelectedTableId(null); }}
+            onToggleAiExcluded={toggleTableManualOnly}
+            onToggleOnlineBlocked={toggleTableOnlineExcluded}
+            overlay={hostMode}
             onOpenReservation={(id) => { setSelectedTableId(null); setSelectedReservationId(id); }}
             onEditParty={(t) => setEditParty({ kind: 'table', id: t.id, name: t.party || '', size: t.partySize || 1 })}
             setMergeMode={setMergeMode}
@@ -9698,16 +9831,13 @@ export default function Home({ hostMode = false } = {}) {
               }}
               onSeatNow={() => {
                 if (r.tableId != null) {
-                  // Bypass the AI co-pilot. The reservation already
-                  // knows where it's going — seat them directly. The
-                  // tableId may be a number (single table) or a string
-                  // like "4_5" (virtual merge from the AI suggestion
-                  // earlier in the reservation lifecycle); performSeat
-                  // handles both natively via its virtual-id splitter.
-                  // overridePartyId tells performSeat to clean up THIS
-                  // reservation by id, since we're not routing through
-                  // selectedPartyId at all.
-                  performSeat(r.tableId, false, r.id);
+                  // An assigned table is a suggestion. Enter the existing
+                  // pending-seat flow so the host can confirm it or choose
+                  // any other open table without changing lifecycle code.
+                  const assigned = tables.find(t => String(r.tableId).split('_').includes(String(t.id)));
+                  if (assigned) setActiveFloorId(assigned.floorId);
+                  setForcedSeatSuggestion({ partyId: r.id, tableId: r.tableId });
+                  setSelectedPartyId(r.id);
                   setSelectedReservationId(null);
                   setActiveTab('floor');
                 } else {
@@ -9952,6 +10082,7 @@ export default function Home({ hostMode = false } = {}) {
           the tiles beneath it, not the chip itself. */}
       {touchDragGhost && (
         <div
+          data-party-drag-ghost
           className="fixed z-[100] pointer-events-none"
           style={{ left: touchDragGhost.x, top: touchDragGhost.y, transform: 'translate(-50%, -130%)' }}
         >
@@ -9998,6 +10129,10 @@ export default function Home({ hostMode = false } = {}) {
         @keyframes mesa-ready {
           0%, 100% { box-shadow: 0 0 0 0 rgba(92, 225, 230, 0.0); }
           50%      { box-shadow: 0 0 0 6px rgba(92, 225, 230, 0.14); }
+        }
+        @keyframes mesa-rail-in {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
         }
         .mesa-ready { animation: mesa-ready 2.4s ease-in-out infinite; }
         .mesa-wheel { scrollbar-width: none; -ms-overflow-style: none; }
