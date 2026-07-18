@@ -1483,6 +1483,7 @@ function FloorMap({
   // the entire active room reachable while retaining a tiny 5% safety floor
   // for sparse/oversized imported plans.
   const minimumZoom = () => {
+    if (typeof document === 'undefined') return 0.05; // SSR/prerender: no DOM; effect-driven fit recomputes on mount
     const el = document.getElementById('floor-canvas');
     if (!el || visibleTables.length === 0) return 0.05;
     const r = el.getBoundingClientRect();
