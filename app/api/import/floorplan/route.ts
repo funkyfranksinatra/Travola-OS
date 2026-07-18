@@ -15,12 +15,13 @@
 // rows shifted) instead of reducing it. Geometry now belongs to the CV
 // pass, where it is exact; the LLM never touches coordinates again.
 //
-// Same trust posture as the reservation importer: full gpt-4o by default
+// Same trust posture as the reservation importer: full GPT-5.6 by default
 // (IMPORT_MODEL env override), and nothing commits without the staged
 // review — the model proposes, the host disposes.
 
 import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
+import { IMPORT_MODEL } from "@/lib/ai-models";
 import { z } from "zod";
 
 export const maxDuration = 60;
@@ -90,7 +91,7 @@ type TileIn = { index: number; image: string };
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const model = openai(process.env.IMPORT_MODEL || "gpt-4o");
+    const model = openai(IMPORT_MODEL);
 
     // ── labels mode ─────────────────────────────────────────────────
     if (body?.mode === "labels") {

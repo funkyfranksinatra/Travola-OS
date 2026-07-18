@@ -24,6 +24,7 @@
 
 import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
+import { SEAT_MODEL } from "@/lib/ai-models";
 import { z } from "zod";
 
 const DINING_WINDOW_MINS = 90;
@@ -167,7 +168,7 @@ export async function POST(req: Request) {
     // ── 5) LLM preference among the pre-validated candidates only ──────
     try {
       const result = await generateObject({
-        model: openai("gpt-4o-mini"),
+        model: openai(SEAT_MODEL),
         schema: z.object({
           // number OR string — designer tables ("t16") and virtual merges
           // ("t16_t17") are first-class. The old z.number() made them

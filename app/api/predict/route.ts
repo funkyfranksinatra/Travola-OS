@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { RESEARCH_MODEL } from "@/lib/ai-models";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
@@ -175,7 +176,7 @@ const RESEARCH_TIMEOUT_MS = 40_000;
 async function runResearchCall(prompt: string, keys: AspectKey[]): Promise<Research | null> {
   try {
     const run = generateText({
-      model: openai.responses(process.env.PREDICT_RESEARCH_MODEL || process.env.PREDICT_MODEL || "gpt-4o"),
+      model: openai.responses(RESEARCH_MODEL),
       tools: { web_search: openai.tools.webSearch({}) },
       prompt,
     });
