@@ -2082,7 +2082,7 @@ function FloorMap({
                   : ''
               }`}
             >
-              {f.name}{f.onlineExcluded && ' 🔒'}{f.isManualOnly && !(editMode && activeFloorId === f.id) && <span className="ml-1 text-rose-400" title="Excluded from AI">AI⊘</span>}
+              {f.name}{f.isManualOnly && !(editMode && activeFloorId === f.id) && ' 🔒'}
               {/* Floor ⋮ menu stays in host mode: blocking a floor or
                   table from online booking / AI assignment is shift-time
                   host work (a private party, a closed section), not a
@@ -2116,7 +2116,7 @@ function FloorMap({
                   title={f.isManualOnly ? 'Manual-only floor (AI excluded) — click to include' : 'Click to exclude this whole floor from AI'}
                   role="button"
                   aria-label="Toggle manual-only floor"
-                >{f.isManualOnly ? 'AI⊘' : 'AI'}</span>
+                >{f.isManualOnly ? '🔒' : '🔓'}</span>
               )}
             </button>
             )
@@ -7946,7 +7946,6 @@ export default function Home({ hostMode = false } = {}) {
   const [sectionView,          setSectionView]          = useState(false);
   const [forceSeatTarget,  setForceSeatTarget]  = useState(null);
   const [dragState,        setDragState]        = useState(null);
-  const [hostServiceLogOpen, setHostServiceLogOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [migrateOpen, setMigrateOpen] = useState(false);
   // Pre-migration snapshot; non-null = a migration awaits Keep/Cancel.
@@ -8370,7 +8369,7 @@ export default function Home({ hostMode = false } = {}) {
   // ── Touch drag-to-seat (iPad) ───────────────────────────────────────
   // HTML5 drag-and-drop is mouse-first and inconsistent under touch, so
   // coarse-pointer devices get a hand-rolled equivalent: press-and-hold
-  // a party row (450ms — a quick tap still opens Party Details), a
+  // a party row (~350ms — a quick tap still opens Party Details), a
   // floating chip lifts under the finger, tables highlight as the finger
   // passes over them, and lifting over a table seats the party through
   // the exact same onSeatPartyDrop path the mouse uses. The pre-
@@ -8451,7 +8450,7 @@ export default function Home({ hostMode = false } = {}) {
       window.addEventListener('touchmove', onMove, { passive: false });
       window.addEventListener('touchend', onEnd, { passive: false });
       window.addEventListener('touchcancel', onCancel, { passive: true });
-    }, 450);
+    }, 350);
   };
 
   const onSeatPartyDrop = (partyId, tableId) => {
@@ -9649,9 +9648,9 @@ export default function Home({ hostMode = false } = {}) {
         }} reservationsDisabled={viewingPast} walkInDisabled={viewingPast || viewingFuture} now={now} aiReason={aiReason} servers={viewServers} staffReadOnly={viewingPast} onPartyDragStart={onPartyDragStart} onPartyDragEnd={onPartyDragEnd} onPartyTouchStart={beginPartyTouchDrag} partyRowsDraggable={!coarsePointer} addServer={addServer} toggleServerShift={toggleServerShift} setServerAiExcluded={setServerAiExcluded} isAssignMode={isAssignMode} setIsAssignMode={setIsAssignMode} assignSelectedServer={assignSelectedServer} setAssignSelectedServer={setAssignSelectedServer} handleAIAssign={handleAIAssign} aiAssignLoading={aiAssignLoading} setEditMode={setEditMode} setMergeMode={setMergeMode} setMergeSelection={setMergeSelection} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} />
         )}
         <main className="flex-1 flex flex-col overflow-hidden">
-          {activeTab === "floor" && (<div className="flex-1 flex overflow-hidden min-h-0 relative"><FloorMap hostMode={hostMode} serviceLogOpen={hostServiceLogOpen} onToggleServiceLog={() => setHostServiceLogOpen(v => !v)} hydrated={hydrated} onSeatPartyDrop={onSeatPartyDrop} tables={viewTables} selectedTableId={selectedTableId} setSelectedTableId={setSelectedTableId} setSelectedReservationId={setSelectedReservationId} selectedPartyId={selectedPartyId} setSelectedPartyId={setSelectedPartyId} waitlist={waitlist} reservations={viewDateReservations} allReservations={reservations} viewDate={viewDate} setViewDate={setViewDate} editMode={editMode} setEditMode={setEditMode} mergeMode={mergeMode} setMergeMode={setMergeMode} mergeSelection={mergeSelection} setMergeSelection={setMergeSelection} newCapacity={newCapacity} setNewCapacity={setNewCapacity} addTable={addTable} deleteTable={deleteTable} rotateTable={rotateTable} renameTable={renameTable} setTableCapacity={setTableCapacity} setTableShape={setTableShape} setTableArea={setTableArea} renameFloor={renameFloor} reorderFloors={reorderFloors} toggleTableManualOnly={toggleTableManualOnly} toggleTableOnlineExcluded={toggleTableOnlineExcluded} toggleFloorManualOnly={toggleFloorManualOnly} toggleFloorOnlineExcluded={toggleFloorOnlineExcluded} setFloorTablesManualOnly={setFloorTablesManualOnly} setFloorTablesOnlineExcluded={setFloorTablesOnlineExcluded} addFloor={addFloor} undo={undo} canUndo={editHistory.length > 0} dragState={dragState} setDragState={setDragState} moveSourceId={moveSourceId} setMoveSourceId={setMoveSourceId} attemptSeat={attemptSeat} clearTable={clearTable} now={now} aiSuggestedIds={aiSuggestedIds} aiSuggestedRawId={aiSuggestedRawId} servers={viewServers} isAssignMode={isAssignMode} assignSelectedServer={assignSelectedServer} assignTableToServer={assignTableToServer} setIsAssignMode={setIsAssignMode} setAssignSelectedServer={setAssignSelectedServer} viewingServerId={viewingServerId} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} newTableShape={newTableShape} setNewTableShape={setNewTableShape} newTableArea={newTableArea} setNewTableArea={setNewTableArea} reassignReservationId={reassignReservationId} setReassignReservationId={setReassignReservationId} updateReservationTable={updateReservationTable} assignReservationToTables={assignReservationToTables} onAssignConflictPrompt={(p) => setAssignOverride(p)} floors={floors} setFloors={setFloors} activeFloorId={activeFloorId} setActiveFloorId={setActiveFloorId} isAddingFloor={isAddingFloor} setIsAddingFloor={setIsAddingFloor} newFloorName={newFloorName} setNewFloorName={setNewFloorName} underlay={floorUnderlays[activeFloorId] || null} showUnderlay={showUnderlay} setShowUnderlay={setShowUnderlay} migrationActive={!!migrationBackup} onCancelMigration={cancelFloorMigration} deleteFloor={deleteFloor} />{!editMode && (((selectedPartyId || reassignReservationId) && !mergeMode)
+          {activeTab === "floor" && (<div className="flex-1 flex overflow-hidden min-h-0"><FloorMap hostMode={hostMode} hydrated={hydrated} onSeatPartyDrop={onSeatPartyDrop} tables={viewTables} selectedTableId={selectedTableId} setSelectedTableId={setSelectedTableId} setSelectedReservationId={setSelectedReservationId} selectedPartyId={selectedPartyId} setSelectedPartyId={setSelectedPartyId} waitlist={waitlist} reservations={viewDateReservations} allReservations={reservations} viewDate={viewDate} setViewDate={setViewDate} editMode={editMode} setEditMode={setEditMode} mergeMode={mergeMode} setMergeMode={setMergeMode} mergeSelection={mergeSelection} setMergeSelection={setMergeSelection} newCapacity={newCapacity} setNewCapacity={setNewCapacity} addTable={addTable} deleteTable={deleteTable} rotateTable={rotateTable} renameTable={renameTable} setTableCapacity={setTableCapacity} setTableShape={setTableShape} setTableArea={setTableArea} renameFloor={renameFloor} reorderFloors={reorderFloors} toggleTableManualOnly={toggleTableManualOnly} toggleTableOnlineExcluded={toggleTableOnlineExcluded} toggleFloorManualOnly={toggleFloorManualOnly} toggleFloorOnlineExcluded={toggleFloorOnlineExcluded} setFloorTablesManualOnly={setFloorTablesManualOnly} setFloorTablesOnlineExcluded={setFloorTablesOnlineExcluded} addFloor={addFloor} undo={undo} canUndo={editHistory.length > 0} dragState={dragState} setDragState={setDragState} moveSourceId={moveSourceId} setMoveSourceId={setMoveSourceId} attemptSeat={attemptSeat} clearTable={clearTable} now={now} aiSuggestedIds={aiSuggestedIds} aiSuggestedRawId={aiSuggestedRawId} servers={viewServers} isAssignMode={isAssignMode} assignSelectedServer={assignSelectedServer} assignTableToServer={assignTableToServer} setIsAssignMode={setIsAssignMode} setAssignSelectedServer={setAssignSelectedServer} viewingServerId={viewingServerId} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} newTableShape={newTableShape} setNewTableShape={setNewTableShape} newTableArea={newTableArea} setNewTableArea={setNewTableArea} reassignReservationId={reassignReservationId} setReassignReservationId={setReassignReservationId} updateReservationTable={updateReservationTable} assignReservationToTables={assignReservationToTables} onAssignConflictPrompt={(p) => setAssignOverride(p)} floors={floors} setFloors={setFloors} activeFloorId={activeFloorId} setActiveFloorId={setActiveFloorId} isAddingFloor={isAddingFloor} setIsAddingFloor={setIsAddingFloor} newFloorName={newFloorName} setNewFloorName={setNewFloorName} underlay={floorUnderlays[activeFloorId] || null} showUnderlay={showUnderlay} setShowUnderlay={setShowUnderlay} migrationActive={!!migrationBackup} onCancelMigration={cancelFloorMigration} deleteFloor={deleteFloor} />{!editMode && (((selectedPartyId || reassignReservationId) && !mergeMode)
             ? <SeatingAssistRail aiThinking={aiThinking} selectedPartyId={selectedPartyId} reassignReservationId={reassignReservationId} reservations={reservations} waitlist={waitlist} tables={tables} aiSuggestedIds={aiSuggestedIds} onMerge={() => { setMergeMode(true); setMergeSelection([]); }} onCancel={() => { setSelectedPartyId(null); setReassignReservationId(null); }} />
-            : (hostMode ? (hostServiceLogOpen && <ServiceRail overlay serviceLog={serviceLog} now={now} onOpenTable={openSeatedTable} onClose={() => setHostServiceLogOpen(false)} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />) : <ServiceRail serviceLog={serviceLog} now={now} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />))}</div>)}
+            : <ServiceRail serviceLog={serviceLog} now={now} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />)}</div>)}
           {activeTab === "service" && <ServiceView serviceLog={serviceLog} now={now} onRefresh={loadServiceLog} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />}
           {activeTab === "timeline" && <TimelineView reservations={todaysReservations} restaurantHours={restaurantHours} onSelectReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} />}
           {activeTab === "waitlist" && <WaitlistView waitlist={waitlist} reservations={todaysReservations} now={now} onSeatParty={seatFromWaitlist} onOpenReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} onDeleteParty={(id) => requestDelete('waitlist', id)} />}
@@ -10028,7 +10027,6 @@ export default function Home({ hostMode = false } = {}) {
           the tiles beneath it, not the chip itself. */}
       {touchDragGhost && (
         <div
-          data-party-drag-ghost
           className="fixed z-[100] pointer-events-none"
           style={{ left: touchDragGhost.x, top: touchDragGhost.y, transform: 'translate(-50%, -130%)' }}
         >
@@ -10075,10 +10073,6 @@ export default function Home({ hostMode = false } = {}) {
         @keyframes mesa-ready {
           0%, 100% { box-shadow: 0 0 0 0 rgba(92, 225, 230, 0.0); }
           50%      { box-shadow: 0 0 0 6px rgba(92, 225, 230, 0.14); }
-        }
-        @keyframes mesa-rail-in {
-          from { transform: translateX(100%); }
-          to { transform: translateX(0); }
         }
         .mesa-ready { animation: mesa-ready 2.4s ease-in-out infinite; }
         .mesa-wheel { scrollbar-width: none; -ms-overflow-style: none; }
