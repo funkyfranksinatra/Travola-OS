@@ -48,11 +48,11 @@ import { openai } from "@ai-sdk/openai";
 //        construction, competitor } }  →  full forecast JSON.
 // ─────────────────────────────────────────────────────────────────────
 
-// Web research runs two parallel search-LLM calls with a 40s budget —
+// Web research runs two parallel search-LLM calls with a 120s budget —
 // the route needs room beyond a default serverless timeout. Results are
 // cached (30 min), so only the first forecast of a (location, date)
 // pays the wait.
-export const maxDuration = 60;
+export const maxDuration = 180;
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -171,7 +171,10 @@ const ASPECT_BOUNDS: Record<AspectKey, [number, number]> = {
 const SOFT_KEYS: AspectKey[] = ["reviews", "virality", "economy", "community"];
 const SOFT_AGGREGATE_CAP = 20;
 
-const RESEARCH_TIMEOUT_MS = 40_000;
+// 120s: GPT-5.6-family reasoning models measured at ~62s (terra) to
+// ~115s (full) per web-search research call — 40s produced a 100%
+// research_timeout rate after the model migration.
+const RESEARCH_TIMEOUT_MS = 120_000;
 
 async function runResearchCall(prompt: string, keys: AspectKey[]): Promise<Research | null> {
   try {
