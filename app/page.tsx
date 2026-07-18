@@ -354,9 +354,14 @@ function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, o
 
   return (
     <header className="flex items-center px-6 h-14 bg-panel border-b border-border flex-shrink-0">
-      <div className="flex items-baseline gap-2.5 mr-8">
-        <span className="font-display text-base font-bold tracking-wide text-ai">Travola</span>
-        <span className="font-mono text-[9px] text-ink-400 tracking-[0.2em] uppercase">{hostMode ? 'Host' : 'v1.2'}</span>
+      <div className="flex items-center gap-2.5 mr-8">
+        {/* Brand mark — SVG so it stays crisp at any DPI; rounded to
+            match the icon's own card radius at this size. */}
+        <img src="/brand/travola-icon.svg" alt="" aria-hidden="true" className="w-6 h-6 rounded-[6px] flex-shrink-0" />
+        <span className="flex items-baseline gap-2.5">
+          <span className="font-display text-base font-bold tracking-wide text-ai">Travola</span>
+          <span className="font-mono text-[9px] text-ink-400 tracking-[0.2em] uppercase">{hostMode ? 'Host' : 'v1.2'}</span>
+        </span>
       </div>
       <nav className="flex h-full items-stretch">
         {/* Host mode is the front-of-house app: no settings tab (floor-
