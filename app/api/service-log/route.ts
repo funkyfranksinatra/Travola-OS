@@ -159,26 +159,3 @@ export async function POST(req: Request) {
     return Response.json({ error: "finish_failed" }, { status: 500 });
   }
 }
-
-// ── PATCH: move a currently seated party without creating another seat ──
-export async function PATCH(req: Request) {
-  try {
-    const body = await req.json();
-    const toTableId = String(body.toTableId || "");
-    if (!toTableId) return Response.json({ ok: false, reason: "missing_target" }, { status: 400 });
-    const serviceDate = serviceDateOf(todayKey());
-    const reservation = body.partyId
-      ? await prisma.reservation.findFirst({ where: { id: String(body.partyId), status: "SEATED", serviceDate } })
-      : await prisma.reservation.findFirst({
-          where: { status: "SEATED", serviceDate, guest: { name: String(body.name || "") } },
-          orderBy: { seatedTime: "desc" },
-        });
-    if (!reservation) return Response.json({ ok: false, reason: "no_seated_match" }, { status: 404 });
-    await prisma.reservationTable.deleteMany({ where: { reservationId: reservation.id } });
-    await prisma.reservationTable.create({ data: { reservationId: reservation.id, tableId: toTableId, isPrimary: true } });
-    return Response.json({ ok: true, moved: reservation.id });
-  } catch (err) {
-    console.error("[api/service-log PATCH]", err);
-    return Response.json({ error: "move_failed" }, { status: 500 });
-  }
-}

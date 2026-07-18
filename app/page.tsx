@@ -463,8 +463,9 @@ function ServerRow({ server, onToggle, onShiftToggle = null, onAiLockToggle = nu
         <span className={`text-[13px] truncate ${on ? "text-white font-medium" : "text-gray-300"}`}>
           {server.name}
         </span>
-        {/* AI-exclusion badge: the lock is reserved for online-booking
-            blocks, so dedicated service uses the red AI prohibition mark. */}
+        {/* AI-exclusion lock — same idiom as the floor tabs: 🔒 when the
+            server is dedicated (private room / VIP) and invisible to the
+            auto-assigner; 🔓 appears on row hover to toggle. */}
         {onAiLockToggle && (
           <span
             onClick={(e) => { e.stopPropagation(); onAiLockToggle(server.id, !server.aiExcluded); }}
@@ -476,7 +477,7 @@ function ServerRow({ server, onToggle, onShiftToggle = null, onAiLockToggle = nu
               : 'Click to exclude from AI auto-assign (dedicated service)'}
             role="button"
             aria-label="Toggle AI exclusion"
-          >{server.aiExcluded ? 'AI⊘' : 'AI'}</span>
+          >{server.aiExcluded ? '🔒' : '🔓'}</span>
         )}
         {/* Role tag — only renders for bartenders, and only where the
             row is shown in a bartender context (showBarTag). The waiter
@@ -1089,7 +1090,7 @@ function FloorMap({
   editMode, setEditMode, mergeMode, setMergeMode, mergeSelection, setMergeSelection,
   newCapacity, setNewCapacity, newTableShape = 'square', setNewTableShape, newTableArea = 'dining', setNewTableArea, addTable, deleteTable,
   dragState, setDragState, moveSourceId, setMoveSourceId,
-  attemptSeat, clearTable, moveParty = null, now, aiSuggestedIds = [], aiSuggestedRawId = null,
+  attemptSeat, clearTable, now, aiSuggestedIds = [], aiSuggestedRawId = null,
   servers = [], isAssignMode = false, assignSelectedServer = null, assignTableToServer, setIsAssignMode, setAssignSelectedServer, viewingServerId = null, setViewingServerId, sectionView = false, setSectionView,
   reassignReservationId = null, setReassignReservationId, updateReservationTable, assignReservationToTables, onAssignConflictPrompt,
   floors = [{ id: 'f1', name: 'Main Floor', isManualOnly: false }], setFloors, activeFloorId = 'f1', setActiveFloorId,
@@ -1868,19 +1869,6 @@ function FloorMap({
       if (setReassignReservationId) setReassignReservationId(null);
       return;
     }
-    // Move-party mode reuses the same table-pick surface, but keeps the
-    // seated lifecycle record intact: only its live table association is
-    // changed, so the service journal never receives a second seating.
-    if (moveSourceId) {
-      const source = tables.find(t => t.id === moveSourceId);
-      if (!source || table.status !== 'available' || table.id === source.id) return;
-      const party = source.party;
-      const partySize = source.partySize;
-      if (!party || !partySize || getEffectiveCapacity(table, tables) < partySize) return;
-      if (moveParty) moveParty(source, table);
-      setMoveSourceId(null); setSelectedTableId(table.id);
-      return;
-    }
     if (editMode) return;
     if (dragState) return;
     // Section Assignment hijack: when isAssignMode is true and a server
@@ -2604,12 +2592,6 @@ function FloorMap({
                     {t.area}
                   </span>
                 )}
-                {(t.onlineExcluded || t.manualOnly) && (
-                  <div className="absolute -top-2 -right-2 flex items-center gap-0.5 pointer-events-none" aria-label="Table restrictions">
-                    {t.onlineExcluded && <span className="min-w-4 h-4 px-0.5 rounded-full bg-panel-card border border-border-hi text-[10px] leading-[14px] text-ink-50" title="Online reservations blocked">🔒</span>}
-                    {t.manualOnly && <span className="min-w-4 h-4 px-0.5 rounded-full bg-rose-950 border border-rose-400/70 text-[7px] leading-[14px] font-bold text-rose-300" title="Excluded from AI">AI⊘</span>}
-                  </div>
-                )}
                 {/* Capacity (above) + name (below). Capacity reads as
                     a small muted label so the name is the focal text;
                     flipped from the previous order to keep the bottom
@@ -2794,7 +2776,7 @@ function FloorMap({
                           : 'bg-panel text-ink-300 border-border hover:text-ink-50'
                       }`}
                       title={pt.manualOnly ? 'Excluded from AI auto-assign — click to include' : 'Included in AI auto-assign — click to exclude'}
-                    >{pt.manualOnly ? 'AI⊘ Excluded' : 'AI included'}</button>
+                    >{pt.manualOnly ? '🔒 Manual only' : 'AI included'}</button>
                   </div>
                   {/* Change table number — sits under the seat control */}
                   <div className="flex items-center justify-between gap-3">
@@ -6938,7 +6920,7 @@ function ServiceView({ serviceLog, now, onRefresh, onOpenTable, dateLabel = null
   );
 }
 
-function TableDetailsPanel({ table, servers, now, reservations = [], shiftWindow = null, viewDateStr = null, onClose, onMarkBussing, onClearTable, onOpenReservation, onEditParty, onMoveParty, onToggleAiExcluded, onToggleOnlineBlocked, setMergeMode, setMergeSelection, unmergeTable, overlay = false }) {
+function TableDetailsPanel({ table, servers, now, reservations = [], shiftWindow = null, viewDateStr = null, onClose, onMarkBussing, onClearTable, onOpenReservation, onEditParty, setMergeMode, setMergeSelection, unmergeTable }) {
   if (!table) return null;
 
   const assignedServer = servers.find(s => s.id === table.assignedServerId);
@@ -7016,7 +6998,7 @@ function TableDetailsPanel({ table, servers, now, reservations = [], shiftWindow
   const canClear       = isOccupied || isBussing;  // Reserved isn't "cleared" — use a different flow for that
 
   return (
-    <aside className={`${overlay ? 'fixed inset-y-0 right-0 z-40 w-[min(320px,88vw)] shadow-2xl animate-[mesa-rail-in_0.2s_ease-out]' : 'w-80 flex-shrink-0'} bg-panel border-l border-border p-4 flex flex-col overflow-y-auto`}>
+    <aside className="w-80 bg-panel border-l border-border p-4 flex flex-col flex-shrink-0 overflow-y-auto">
       {/* Header — title + mini status line + close */}
       <div className="flex items-start justify-between mb-4">
         <div className="min-w-0">
@@ -7086,9 +7068,6 @@ function TableDetailsPanel({ table, servers, now, reservations = [], shiftWindow
 
       {/* Actions — sit naturally beneath vitals with a modest gap */}
       <div className="mt-6 space-y-1.5">
-        {isOccupied && onMoveParty && (
-          <button onClick={() => onMoveParty(table)} className="w-full px-3 py-1.5 rounded-lg bg-transparent border border-ai/50 text-ai text-sm font-medium hover:bg-ai/10 transition-colors">Move party</button>
-        )}
         {isOccupied && onEditParty && (
           <button
             onClick={() => onEditParty(table)}
@@ -7096,12 +7075,6 @@ function TableDetailsPanel({ table, servers, now, reservations = [], shiftWindow
           >
             <span className="text-[13px] leading-none">✎</span> Edit party / covers
           </button>
-        )}
-        {onToggleAiExcluded && (
-          <button onClick={() => onToggleAiExcluded(table.id)} className={`w-full px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${table.manualOnly ? 'bg-rose-500/10 border-rose-400/60 text-rose-300' : 'bg-transparent border-border-hi text-ink-50 hover:bg-panel-up'}`}>AI⊘ Exclude from AI</button>
-        )}
-        {onToggleOnlineBlocked && (
-          <button onClick={() => onToggleOnlineBlocked(table.id)} className={`w-full px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${table.onlineExcluded ? 'bg-amber-500/10 border-amber-400/60 text-amber-200' : 'bg-transparent border-border-hi text-ink-50 hover:bg-panel-up'}`}>🔒 Block Online Reservations</button>
         )}
         <button
           onClick={onMarkBussing}
@@ -8061,7 +8034,6 @@ export default function Home({ hostMode = false } = {}) {
   // the original form used by handleTableClick to reconstruct the merge
   // intent when the host clicks any pulsing base table.
   const [aiSuggestedRawId, setAiSuggestedRawId] = useState(null);
-  const [forcedSeatSuggestion, setForcedSeatSuggestion] = useState(null);
   const [aiReason,       setAiReason]       = useState("");
 
   useEffect(() => {
@@ -8175,16 +8147,6 @@ export default function Home({ hostMode = false } = {}) {
 
   // ─── AI Seating Agent — fetch on party selection OR reassign mode ─
   useEffect(() => {
-    // A reservation's assigned table is a deliberate host suggestion,
-    // not an auto-commit. Keep it glowing without replacing it via AI.
-    const forced = forcedSeatSuggestion && forcedSeatSuggestion.partyId === selectedPartyId ? forcedSeatSuggestion : null;
-    if (forced) {
-      setAiThinking(false);
-      setAiReason('Assigned table');
-      setAiSuggestedIds(splitTableIds(forced.tableId));
-      setAiSuggestedRawId(forced.tableId);
-      return undefined;
-    }
     // Clear previous AI state whenever the party selection changes
     setAiSuggestedIds([]);
     setAiReason("");
@@ -8321,7 +8283,7 @@ export default function Home({ hostMode = false } = {}) {
 
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPartyId, reassignReservationId, forcedSeatSuggestion]);
+  }, [selectedPartyId, reassignReservationId]);
 
   // ─── View mode auto-dismiss ──────────────────────────────────────
   // While a server's tables are being highlighted (viewingServerId set),
@@ -8627,21 +8589,6 @@ export default function Home({ hostMode = false } = {}) {
       .join(' + ');
     setToastOk(isForce ? `Force-seated ${party.name} at ${seatLabel}` : `Seated ${party.name} at ${seatLabel}`);
     setSelectedPartyId(null);
-    setForcedSeatSuggestion(null);
-  };
-
-  const moveParty = (source, destination) => {
-    const sourceIds = source.groupId
-      ? new Set(tables.filter(t => t.groupId === source.groupId).map(t => t.id))
-      : new Set([source.id]);
-    setTables(prev => prev.map(t => {
-      if (sourceIds.has(t.id)) return { ...t, status: 'available', party: null, partySize: null, startedAt: null, groupId: null, seatedPartyId: null };
-      if (t.id === destination.id) return { ...t, status: 'seated', party: source.party, partySize: source.partySize, startedAt: source.startedAt, seatedPartyId: source.seatedPartyId || null };
-      return t;
-    }));
-    persist('/api/service-log', 'PATCH', { partyId: source.seatedPartyId, name: source.party, fromTableId: source.id, toTableId: destination.id });
-    scheduleServiceLogRefresh();
-    setToastOk(`Moved ${source.party} to ${destination.name}`);
   };
 
   // ─── Quick Walk-In — co-pilot: park in waitlist, let the seating ─
@@ -9702,7 +9649,7 @@ export default function Home({ hostMode = false } = {}) {
         }} reservationsDisabled={viewingPast} walkInDisabled={viewingPast || viewingFuture} now={now} aiReason={aiReason} servers={viewServers} staffReadOnly={viewingPast} onPartyDragStart={onPartyDragStart} onPartyDragEnd={onPartyDragEnd} onPartyTouchStart={beginPartyTouchDrag} partyRowsDraggable={!coarsePointer} addServer={addServer} toggleServerShift={toggleServerShift} setServerAiExcluded={setServerAiExcluded} isAssignMode={isAssignMode} setIsAssignMode={setIsAssignMode} assignSelectedServer={assignSelectedServer} setAssignSelectedServer={setAssignSelectedServer} handleAIAssign={handleAIAssign} aiAssignLoading={aiAssignLoading} setEditMode={setEditMode} setMergeMode={setMergeMode} setMergeSelection={setMergeSelection} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} />
         )}
         <main className="flex-1 flex flex-col overflow-hidden">
-          {activeTab === "floor" && (<div className="flex-1 flex overflow-hidden min-h-0 relative"><FloorMap hostMode={hostMode} serviceLogOpen={hostServiceLogOpen} onToggleServiceLog={() => setHostServiceLogOpen(v => !v)} hydrated={hydrated} onSeatPartyDrop={onSeatPartyDrop} tables={viewTables} selectedTableId={selectedTableId} setSelectedTableId={setSelectedTableId} setSelectedReservationId={setSelectedReservationId} selectedPartyId={selectedPartyId} setSelectedPartyId={setSelectedPartyId} waitlist={waitlist} reservations={viewDateReservations} allReservations={reservations} viewDate={viewDate} setViewDate={setViewDate} editMode={editMode} setEditMode={setEditMode} mergeMode={mergeMode} setMergeMode={setMergeMode} mergeSelection={mergeSelection} setMergeSelection={setMergeSelection} newCapacity={newCapacity} setNewCapacity={setNewCapacity} addTable={addTable} deleteTable={deleteTable} rotateTable={rotateTable} renameTable={renameTable} setTableCapacity={setTableCapacity} setTableShape={setTableShape} setTableArea={setTableArea} renameFloor={renameFloor} reorderFloors={reorderFloors} toggleTableManualOnly={toggleTableManualOnly} toggleTableOnlineExcluded={toggleTableOnlineExcluded} toggleFloorManualOnly={toggleFloorManualOnly} toggleFloorOnlineExcluded={toggleFloorOnlineExcluded} setFloorTablesManualOnly={setFloorTablesManualOnly} setFloorTablesOnlineExcluded={setFloorTablesOnlineExcluded} addFloor={addFloor} undo={undo} canUndo={editHistory.length > 0} dragState={dragState} setDragState={setDragState} moveSourceId={moveSourceId} setMoveSourceId={setMoveSourceId} attemptSeat={attemptSeat} clearTable={clearTable} moveParty={moveParty} now={now} aiSuggestedIds={aiSuggestedIds} aiSuggestedRawId={aiSuggestedRawId} servers={viewServers} isAssignMode={isAssignMode} assignSelectedServer={assignSelectedServer} assignTableToServer={assignTableToServer} setIsAssignMode={setIsAssignMode} setAssignSelectedServer={setAssignSelectedServer} viewingServerId={viewingServerId} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} newTableShape={newTableShape} setNewTableShape={setNewTableShape} newTableArea={newTableArea} setNewTableArea={setNewTableArea} reassignReservationId={reassignReservationId} setReassignReservationId={setReassignReservationId} updateReservationTable={updateReservationTable} assignReservationToTables={assignReservationToTables} onAssignConflictPrompt={(p) => setAssignOverride(p)} floors={floors} setFloors={setFloors} activeFloorId={activeFloorId} setActiveFloorId={setActiveFloorId} isAddingFloor={isAddingFloor} setIsAddingFloor={setIsAddingFloor} newFloorName={newFloorName} setNewFloorName={setNewFloorName} underlay={floorUnderlays[activeFloorId] || null} showUnderlay={showUnderlay} setShowUnderlay={setShowUnderlay} migrationActive={!!migrationBackup} onCancelMigration={cancelFloorMigration} deleteFloor={deleteFloor} />{!editMode && (((selectedPartyId || reassignReservationId) && !mergeMode)
+          {activeTab === "floor" && (<div className="flex-1 flex overflow-hidden min-h-0 relative"><FloorMap hostMode={hostMode} serviceLogOpen={hostServiceLogOpen} onToggleServiceLog={() => setHostServiceLogOpen(v => !v)} hydrated={hydrated} onSeatPartyDrop={onSeatPartyDrop} tables={viewTables} selectedTableId={selectedTableId} setSelectedTableId={setSelectedTableId} setSelectedReservationId={setSelectedReservationId} selectedPartyId={selectedPartyId} setSelectedPartyId={setSelectedPartyId} waitlist={waitlist} reservations={viewDateReservations} allReservations={reservations} viewDate={viewDate} setViewDate={setViewDate} editMode={editMode} setEditMode={setEditMode} mergeMode={mergeMode} setMergeMode={setMergeMode} mergeSelection={mergeSelection} setMergeSelection={setMergeSelection} newCapacity={newCapacity} setNewCapacity={setNewCapacity} addTable={addTable} deleteTable={deleteTable} rotateTable={rotateTable} renameTable={renameTable} setTableCapacity={setTableCapacity} setTableShape={setTableShape} setTableArea={setTableArea} renameFloor={renameFloor} reorderFloors={reorderFloors} toggleTableManualOnly={toggleTableManualOnly} toggleTableOnlineExcluded={toggleTableOnlineExcluded} toggleFloorManualOnly={toggleFloorManualOnly} toggleFloorOnlineExcluded={toggleFloorOnlineExcluded} setFloorTablesManualOnly={setFloorTablesManualOnly} setFloorTablesOnlineExcluded={setFloorTablesOnlineExcluded} addFloor={addFloor} undo={undo} canUndo={editHistory.length > 0} dragState={dragState} setDragState={setDragState} moveSourceId={moveSourceId} setMoveSourceId={setMoveSourceId} attemptSeat={attemptSeat} clearTable={clearTable} now={now} aiSuggestedIds={aiSuggestedIds} aiSuggestedRawId={aiSuggestedRawId} servers={viewServers} isAssignMode={isAssignMode} assignSelectedServer={assignSelectedServer} assignTableToServer={assignTableToServer} setIsAssignMode={setIsAssignMode} setAssignSelectedServer={setAssignSelectedServer} viewingServerId={viewingServerId} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} newTableShape={newTableShape} setNewTableShape={setNewTableShape} newTableArea={newTableArea} setNewTableArea={setNewTableArea} reassignReservationId={reassignReservationId} setReassignReservationId={setReassignReservationId} updateReservationTable={updateReservationTable} assignReservationToTables={assignReservationToTables} onAssignConflictPrompt={(p) => setAssignOverride(p)} floors={floors} setFloors={setFloors} activeFloorId={activeFloorId} setActiveFloorId={setActiveFloorId} isAddingFloor={isAddingFloor} setIsAddingFloor={setIsAddingFloor} newFloorName={newFloorName} setNewFloorName={setNewFloorName} underlay={floorUnderlays[activeFloorId] || null} showUnderlay={showUnderlay} setShowUnderlay={setShowUnderlay} migrationActive={!!migrationBackup} onCancelMigration={cancelFloorMigration} deleteFloor={deleteFloor} />{!editMode && (((selectedPartyId || reassignReservationId) && !mergeMode)
             ? <SeatingAssistRail aiThinking={aiThinking} selectedPartyId={selectedPartyId} reassignReservationId={reassignReservationId} reservations={reservations} waitlist={waitlist} tables={tables} aiSuggestedIds={aiSuggestedIds} onMerge={() => { setMergeMode(true); setMergeSelection([]); }} onCancel={() => { setSelectedPartyId(null); setReassignReservationId(null); }} />
             : (hostMode ? (hostServiceLogOpen && <ServiceRail overlay serviceLog={serviceLog} now={now} onOpenTable={openSeatedTable} onClose={() => setHostServiceLogOpen(false)} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />) : <ServiceRail serviceLog={serviceLog} now={now} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />))}</div>)}
           {activeTab === "service" && <ServiceView serviceLog={serviceLog} now={now} onRefresh={loadServiceLog} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />}
@@ -9745,10 +9692,6 @@ export default function Home({ hostMode = false } = {}) {
             onClose={() => setSelectedTableId(null)}
             onMarkBussing={() => markForBussing(selectedTableId)}
             onClearTable={() => clearTable(selectedTableId)}
-            onMoveParty={(t) => { setMoveSourceId(t.id); setSelectedTableId(null); }}
-            onToggleAiExcluded={toggleTableManualOnly}
-            onToggleOnlineBlocked={toggleTableOnlineExcluded}
-            overlay={hostMode}
             onOpenReservation={(id) => { setSelectedTableId(null); setSelectedReservationId(id); }}
             onEditParty={(t) => setEditParty({ kind: 'table', id: t.id, name: t.party || '', size: t.partySize || 1 })}
             setMergeMode={setMergeMode}
@@ -9831,13 +9774,16 @@ export default function Home({ hostMode = false } = {}) {
               }}
               onSeatNow={() => {
                 if (r.tableId != null) {
-                  // An assigned table is a suggestion. Enter the existing
-                  // pending-seat flow so the host can confirm it or choose
-                  // any other open table without changing lifecycle code.
-                  const assigned = tables.find(t => String(r.tableId).split('_').includes(String(t.id)));
-                  if (assigned) setActiveFloorId(assigned.floorId);
-                  setForcedSeatSuggestion({ partyId: r.id, tableId: r.tableId });
-                  setSelectedPartyId(r.id);
+                  // Bypass the AI co-pilot. The reservation already
+                  // knows where it's going — seat them directly. The
+                  // tableId may be a number (single table) or a string
+                  // like "4_5" (virtual merge from the AI suggestion
+                  // earlier in the reservation lifecycle); performSeat
+                  // handles both natively via its virtual-id splitter.
+                  // overridePartyId tells performSeat to clean up THIS
+                  // reservation by id, since we're not routing through
+                  // selectedPartyId at all.
+                  performSeat(r.tableId, false, r.id);
                   setSelectedReservationId(null);
                   setActiveTab('floor');
                 } else {
