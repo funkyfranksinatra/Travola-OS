@@ -1097,7 +1097,7 @@ function FloorMap({
   underlay = null, showUnderlay = false, setShowUnderlay = () => {}, migrationActive = false, onCancelMigration = () => {},
   isAddingFloor = false, setIsAddingFloor, newFloorName = "", setNewFloorName, deleteFloor,
   rotateTable, renameTable, setTableCapacity, setTableShape = null, setTableArea = null, renameFloor = () => {}, reorderFloors = null, toggleTableManualOnly = null, toggleTableOnlineExcluded = null, toggleFloorManualOnly = () => {}, toggleFloorOnlineExcluded = () => {}, setFloorTablesManualOnly = () => {}, setFloorTablesOnlineExcluded = () => {}, addFloor, undo, canUndo = false,
-  hostMode = false, serviceLogOpen = false, onToggleServiceLog = null,
+  hostMode = false,
 }) {
   // Visible tables — only the active floor's tables are rendered, drag-
   // tested, and grouped. Lookups by id (selectedTable, dragState target,
@@ -1174,10 +1174,6 @@ function FloorMap({
   // preventDefault() must actually stop Safari's page-level pan/zoom.
   // The canvas also sets touch-action:none so iOS never argues.
   useEffect(() => {
-    // The manager view retains its established immediate touch pan. Host
-    // uses the pointer-intent classifier below so a horizontal swipe is
-    // never mistaken for panning.
-    if (hostMode) return undefined;
     const el = document.getElementById('floor-canvas');
     if (!el) return;
     let gesture = null; // { mode: 'pan'|'pinch', ... }
@@ -1218,7 +1214,7 @@ function FloorMap({
         const [a, b] = [e.touches[0], e.touches[1]];
         const rect = el.getBoundingClientRect();
         const dist = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) || 1;
-        const next = clampZoom(gesture.zoom * (dist / gesture.dist));
+        const next = Math.max(0.4, Math.min(2, gesture.zoom * (dist / gesture.dist)));
         const midX = (a.clientX + b.clientX) / 2 - rect.left;
         const midY = (a.clientY + b.clientY) / 2 - rect.top;
         // Keep the world point that was under the pinch midpoint pinned
@@ -1249,59 +1245,7 @@ function FloorMap({
       el.removeEventListener('touchend', onTouchEnd);
       el.removeEventListener('touchcancel', onTouchEnd);
     };
-  }, [hostMode]);
-  // Host-only pointer intent model: quick, decisive horizontal movement
-  // changes rooms; otherwise a held press becomes a pan after 500ms.
-  // Pointer events leave two-finger pinch behavior to the browser/current
-  // touch path and never engage on a tile, guest drag, or edit action.
-  useEffect(() => {
-    if (!hostMode) return undefined;
-    const el = document.getElementById('floor-canvas');
-    if (!el) return undefined;
-    let active = null;
-    const blocked = (target) => target?.closest?.('[data-table-tile], [data-edit-popup], [data-floor-controls], [data-floor-tab], button, input, select, [data-party-drag-ghost]');
-    const finish = () => {
-      if (!active) return;
-      clearTimeout(active.timer);
-      active = null;
-    };
-    const onPointerDown = (e) => {
-      if (e.pointerType !== 'touch' || e.isPrimary === false || blocked(e.target) || dragState || document.querySelector('[data-party-drag-ghost]')) return;
-      const origin = { x: e.clientX, y: e.clientY };
-      active = { id: e.pointerId, origin, pan: { ...panRef.current }, mode: 'pending', timer: 0, lastX: e.clientX, lastT: performance.now() };
-      active.timer = window.setTimeout(() => {
-        if (active && active.id === e.pointerId && active.mode === 'pending') active.mode = 'pan';
-      }, 500);
-      el.setPointerCapture?.(e.pointerId);
-    };
-    const onPointerMove = (e) => {
-      if (!active || active.id !== e.pointerId) return;
-      const dx = e.clientX - active.origin.x, dy = e.clientY - active.origin.y;
-      const elapsed = Math.max(1, performance.now() - active.lastT);
-      const velocity = Math.abs(e.clientX - active.lastX) / elapsed;
-      active.lastX = e.clientX; active.lastT = performance.now();
-      if (active.mode === 'pending' && Math.abs(dx) > 60 && Math.abs(dx) > 2 * Math.abs(dy) && velocity > 0.25) {
-        active.mode = 'swipe'; clearTimeout(active.timer); e.preventDefault();
-        const index = floors.findIndex(f => f.id === activeFloorId);
-        if (index >= 0 && floors.length > 1) {
-          const next = floors[(index + (dx < 0 ? 1 : floors.length - 1)) % floors.length];
-          setActiveFloorId(next.id); setSelectedTableId(null); setMoveSourceId && setMoveSourceId(null); setMergeSelection([]);
-        }
-        return;
-      }
-      if (active.mode === 'pan') {
-        e.preventDefault(); panMovedRef.current = true;
-        const np = { x: active.pan.x + dx, y: active.pan.y + dy };
-        panRef.current = np; setPan(np);
-      }
-    };
-    const onPointerUp = (e) => { if (active?.id === e.pointerId) finish(); };
-    el.addEventListener('pointerdown', onPointerDown, { passive: true });
-    el.addEventListener('pointermove', onPointerMove, { passive: false });
-    el.addEventListener('pointerup', onPointerUp, { passive: true });
-    el.addEventListener('pointercancel', onPointerUp, { passive: true });
-    return () => { finish(); el.removeEventListener('pointerdown', onPointerDown); el.removeEventListener('pointermove', onPointerMove); el.removeEventListener('pointerup', onPointerUp); el.removeEventListener('pointercancel', onPointerUp); };
-  }, [hostMode, floors, activeFloorId, dragState, setActiveFloorId, setMergeSelection, setMoveSourceId, setSelectedTableId]);
+  }, []);
   const startPan = (e) => {
     // Only pan on a plain background press (left button, not on a tile).
     if (e.button !== 0) return;
@@ -1335,7 +1279,7 @@ function FloorMap({
     // written in the same tick, so rapid wheel bursts between renders
     // still compound correctly.
     const z = zoomRef.current || 1;
-    const next = clampZoom(+(z + dir * step).toFixed(3));
+    const next = Math.max(0.4, Math.min(2, +(z + dir * step).toFixed(3)));
     if (next === z) return;
     const p = panRef.current;
     const np = {
@@ -1368,7 +1312,7 @@ function FloorMap({
     });
     const pad = 60;
     const cw = maxX - minX + pad * 2, ch = maxY - minY + pad * 2;
-    const z = Math.max(0.05, Math.min(1.5, Math.min(r.width / cw, r.height / ch)));
+    const z = Math.max(0.4, Math.min(1.5, Math.min(r.width / cw, r.height / ch)));
     // Center the content bbox in the viewport.
     const cxWorld = (minX + maxX) / 2, cyWorld = (minY + maxY) / 2;
     const np = { x: r.width / 2 - cxWorld * z, y: r.height / 2 - cyWorld * z };
@@ -1480,23 +1424,7 @@ function FloorMap({
   }, [activeFloorId]);
 
   const panDragRef = useRef(null);
-  // "0%" means fit-to-floor, never a literal zero transform. This keeps
-  // the entire active room reachable while retaining a tiny 5% safety floor
-  // for sparse/oversized imported plans.
-  const minimumZoom = () => {
-    const el = document.getElementById('floor-canvas');
-    if (!el || visibleTables.length === 0) return 0.05;
-    const r = el.getBoundingClientRect();
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    visibleTables.forEach(t => {
-      const s = getTableSizePx(t.shape, t.capacity);
-      minX = Math.min(minX, t.x); minY = Math.min(minY, t.y);
-      maxX = Math.max(maxX, t.x + s.width); maxY = Math.max(maxY, t.y + s.height);
-    });
-    const fit = Math.min(r.width / Math.max(1, maxX - minX + 120), r.height / Math.max(1, maxY - minY + 120));
-    return Math.max(0.05, Math.min(2, fit));
-  };
-  const clampZoom = (z) => Math.max(minimumZoom(), Math.min(2, Math.round(z * 100) / 100));
+  const clampZoom = (z) => Math.max(0.4, Math.min(2, Math.round(z * 100) / 100));
   const commitNumber = (id) => {
     const v = numberDraft.trim();
     if (v) {
@@ -2299,14 +2227,11 @@ function FloorMap({
         {/* Floor zoom controls — live in the toolbar so they never cover
             tables. Wheel-zoom works anywhere on the canvas too. */}
         <div data-floor-controls className="ml-auto flex items-center gap-1 bg-panel-card border border-border-hi rounded-lg px-1.5 py-1" onMouseDown={(e) => e.stopPropagation()}>
-          <button onClick={() => zoomStep(-1)} disabled={zoom <= minimumZoom() + 0.001} className="w-11 h-11 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel disabled:opacity-30 text-xl font-bold leading-none transition-colors" title="Zoom out" aria-label="Zoom out">&minus;</button>
-          <span className="w-10 text-center font-mono text-[10px] text-ink-400 tabular-nums select-none">{zoom <= minimumZoom() + 0.001 ? '0%' : `${Math.round(zoom * 100)}%`}</span>
-          <button onClick={() => zoomStep(1)} disabled={zoom >= 1.9999} className="w-11 h-11 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel disabled:opacity-30 text-xl font-bold leading-none transition-colors" title="Zoom in" aria-label="Zoom in">+</button>
+          <button onClick={() => zoomStep(-1)} disabled={zoom <= 0.4001} className="w-7 h-7 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel disabled:opacity-30 text-base font-bold leading-none transition-colors" title="Zoom out" aria-label="Zoom out">&minus;</button>
+          <span className="w-10 text-center font-mono text-[10px] text-ink-400 tabular-nums select-none">{Math.round(zoom * 100)}%</span>
+          <button onClick={() => zoomStep(1)} disabled={zoom >= 1.9999} className="w-7 h-7 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel disabled:opacity-30 text-base font-bold leading-none transition-colors" title="Zoom in" aria-label="Zoom in">+</button>
           <div className="w-px h-4 bg-border mx-0.5" />
-          <button onClick={fitView} className="px-2 min-w-11 h-11 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel font-mono text-[9px] uppercase tracking-[0.08em] font-bold transition-colors" title="Fit all tables" aria-label="Fit all tables">Fit</button>
-          {hostMode && onToggleServiceLog && (
-            <button onClick={onToggleServiceLog} className={`ml-3 min-w-11 h-11 rounded-md flex items-center justify-center px-2 font-mono text-[9px] uppercase tracking-[0.08em] font-bold transition-colors ${serviceLogOpen ? 'bg-ai/15 text-ai' : 'text-ink-300 hover:text-ink-50 hover:bg-panel'}`} title="Toggle service log" aria-label="Toggle service log">Log</button>
-          )}
+          <button onClick={fitView} className="px-2 h-7 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel font-mono text-[9px] uppercase tracking-[0.08em] font-bold transition-colors" title="Fit all tables" aria-label="Fit all tables">Fit</button>
           {editMode && underlay && (
             <button
               onClick={() => setShowUnderlay(v => !v)}
@@ -6846,14 +6771,14 @@ function SeatingAssistRail({ aiThinking, selectedPartyId, reassignReservationId,
   );
 }
 
-function ServiceRail({ serviceLog, now, onOpenTable, dateLabel = null, onClose = null, overlay = false }) {
+function ServiceRail({ serviceLog, now, onOpenTable, dateLabel = null }) {
   if (!serviceLog) return null;
   const { covers, seated, history } = serviceLog;
   return (
-    <aside className={`${overlay ? 'absolute inset-y-0 right-0 z-30 w-[min(320px,88vw)] shadow-2xl animate-[mesa-rail-in_0.2s_ease-out]' : 'w-[248px] flex-shrink-0'} border-l border-border-hi bg-panel flex flex-col overflow-hidden`}>
+    <aside className="w-[248px] flex-shrink-0 border-l border-border-hi bg-panel flex flex-col overflow-hidden">
       <div className="px-3 py-2.5 border-b border-border-hi flex items-baseline justify-between flex-shrink-0">
         <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-400">Service log</span>
-        <div className="flex items-center gap-2"><span className="font-mono text-[11px] text-ink-50 tabular-nums">{covers.total} <span className="text-ink-400">covers</span></span>{onClose && <button onClick={onClose} className="w-11 h-11 -mr-2 flex items-center justify-center text-xl text-ink-400 hover:text-ink-50" aria-label="Close service log">×</button>}</div>
+        <span className="font-mono text-[11px] text-ink-50 tabular-nums">{covers.total} <span className="text-ink-400">covers</span></span>
       </div>
       {dateLabel && (
         <div className="px-3 py-1.5 border-b border-border-hi font-mono text-[9px] uppercase tracking-[0.1em] text-ai flex-shrink-0">{dateLabel}</div>
