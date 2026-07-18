@@ -25,6 +25,7 @@
 import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { SEAT_MODEL } from "@/lib/ai-models";
+import { requireRestaurantId } from "@/lib/tenant";
 import { z } from "zod";
 
 const DINING_WINDOW_MINS = 90;
@@ -69,6 +70,7 @@ const idStr = (v: number | string) => String(v);
 
 export async function POST(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response;
     const body = await req.json();
     const party = body.party ?? {};
     const size: number = Math.max(1, Number(party.size) || 1);

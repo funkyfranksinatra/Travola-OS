@@ -6,12 +6,14 @@
 // is untouched. Fixes tables stuck from a mid-edit reload and seated
 // parties orphaned before the close-out hook existed.
 import { prisma } from "@/lib/prisma";
+import { requireRestaurantId } from "@/lib/tenant";
 
-export async function POST() {
+export async function POST(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const now = new Date();
     const seated = await prisma.reservation.findMany({
-      where: { status: "SEATED" },
+      where: { restaurantId, status: "SEATED" },
       select: { id: true, seatedTime: true },
     });
     await prisma.$transaction(
@@ -28,7 +30,7 @@ export async function POST() {
         })
       )
     );
-    await prisma.table.updateMany({
+    await prisma.table.updateMany({ where: { restaurantId },
       data: {
         status: "available",
         party: null,

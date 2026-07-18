@@ -14,6 +14,7 @@
 // The client chunks big files across several calls; each call is
 // self-contained and idempotent thanks to the dedupe key.
 import { prisma } from "@/lib/prisma";
+import { requireRestaurantId } from "@/lib/tenant";
 import {
   parseResMinutes,
   buildTargetTime,
@@ -63,6 +64,7 @@ function timeOnDate(dateKey: string, raw?: string | null): Date | null {
 
 export async function POST(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json();
     const rows: InRow[] = Array.isArray(body.rows) ? body.rows : [];
     const source = SOURCE_MAP[String(body.source || "other").toLowerCase()] ?? "PAPER_IMPORT";
@@ -129,7 +131,7 @@ export async function POST(req: Request) {
     // ── Bulk dedupe against the DB: one query over the batch's dates ──
     const dateKeys = Array.from(new Set(prepared.map((p) => p.dateKey)));
     const existing = await prisma.reservation.findMany({
-      where: { serviceDate: { in: dateKeys.map(serviceDateOf) } },
+      where: { restaurantId, serviceDate: { in: dateKeys.map(serviceDateOf) } },
       select: { partySize: true, targetTime: true, serviceDate: true, guest: { select: { name: true } } },
     });
     const existingKeys = new Set(
@@ -148,7 +150,7 @@ export async function POST(req: Request) {
     // ── Guests in bulk ───────────────────────────────────────────────
     const wantedNames = Array.from(new Set(fresh.map((p) => p.name)));
     const known = await prisma.guest.findMany({
-      where: { name: { in: wantedNames } },
+      where: { restaurantId, name: { in: wantedNames } },
       select: { id: true, name: true },
     });
     const guestIdByName = new Map(known.map((g) => [g.name.toLowerCase(), g.id]));
@@ -170,6 +172,7 @@ export async function POST(req: Request) {
         contact.set(k, { phone, email });
       }
       const rowsToCreate = missing.map((n) => ({
+        restaurantId,
         name: n,
         phone: contact.get(n.toLowerCase())?.phone ?? null,
         email: contact.get(n.toLowerCase())?.email ?? null,
@@ -180,12 +183,12 @@ export async function POST(req: Request) {
         // Unique collision on phone/email somewhere in the batch —
         // land the guests without contact enrichment rather than fail.
         await prisma.guest.createMany({
-          data: missing.map((n) => ({ name: n })),
+          data: missing.map((n) => ({ restaurantId, name: n })),
           skipDuplicates: true,
         });
       }
       const created = await prisma.guest.findMany({
-        where: { name: { in: missing } },
+        where: { restaurantId, name: { in: missing } },
         select: { id: true, name: true },
       });
       for (const g of created) guestIdByName.set(g.name.toLowerCase(), g.id);
@@ -194,11 +197,12 @@ export async function POST(req: Request) {
     // ── Reservations + table links ───────────────────────────────────
     const landable = fresh.filter((p) => guestIdByName.has(p.name.toLowerCase()));
     const validTableIds = new Set(
-      (await prisma.table.findMany({ select: { id: true } })).map((t) => t.id)
+      (await prisma.table.findMany({ where: { restaurantId }, select: { id: true } })).map((t) => t.id)
     );
 
     const createdRes = await prisma.reservation.createManyAndReturn({
       data: landable.map((p) => ({
+        restaurantId,
         guestId: guestIdByName.get(p.name.toLowerCase())!,
         partySize: p.size,
         status: p.status,

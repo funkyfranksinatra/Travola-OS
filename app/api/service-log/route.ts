@@ -12,6 +12,7 @@
 //   match after a reload. This is also the first brick of the nightly
 //   Shift-actuals feed for the AI predictor.
 import { prisma } from "@/lib/prisma";
+import { requireRestaurantId } from "@/lib/tenant";
 import { dbTablesToAppTableId, serviceDateOf, todayKey, toTimeStr } from "@/lib/db-mappers";
 
 const originOf = (source: string) => (source === "WALK_IN" ? "walk-in" : "reservation");
@@ -19,22 +20,23 @@ const originOf = (source: string) => (source === "WALK_IN" ? "walk-in" : "reserv
 // ── GET: the viewed day's journal (?date=YYYY-MM-DD, default today) ──
 export async function GET(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const raw = new URL(req.url).searchParams.get("date");
     const dateKey = raw && /^\d{4}-\d{2}-\d{2}$/.test(raw) ? raw : todayKey();
     const today = serviceDateOf(dateKey);
 
     const [seatedRes, doneRes, walkedAway] = await Promise.all([
       prisma.reservation.findMany({
-        where: { serviceDate: today, status: "SEATED" },
+        where: { restaurantId, serviceDate: today, status: "SEATED" },
         include: { guest: true, tables: true },
         orderBy: { seatedTime: "desc" },
       }),
       prisma.reservation.findMany({
-        where: { serviceDate: today, status: { in: ["FINISHED", "NO_SHOW", "CANCELLED"] } },
+        where: { restaurantId, serviceDate: today, status: { in: ["FINISHED", "NO_SHOW", "CANCELLED"] } },
         include: { guest: true, tables: true },
       }),
       prisma.waitlistEntry.findMany({
-        where: { serviceDate: today, status: "LEFT" },
+        where: { restaurantId, serviceDate: today, status: "LEFT" },
       }),
     ]);
 
@@ -112,13 +114,14 @@ export async function GET(req: Request) {
 // ── POST: close out a seated party (table cleared) ───────────────────
 export async function POST(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json();
     const today = serviceDateOf(todayKey());
     let target: { id: string; seatedTime: Date | null } | null = null;
 
     if (body.partyId) {
       const byId = await prisma.reservation.findUnique({
-        where: { id: String(body.partyId) },
+        where: { id: String(body.partyId), restaurantId },
         select: { id: true, seatedTime: true, status: true },
       });
       if (byId && byId.status === "SEATED") target = byId;
@@ -128,7 +131,7 @@ export async function POST(req: Request) {
       // Post-reload fallback: today's SEATED rows for this guest name,
       // closest seated-time to the table's remembered timestamp.
       const candidates = await prisma.reservation.findMany({
-        where: { serviceDate: today, status: "SEATED", guest: { name: String(body.name) } },
+        where: { restaurantId, serviceDate: today, status: "SEATED", guest: { name: String(body.name) } },
         select: { id: true, seatedTime: true },
       });
       if (candidates.length > 0) {
@@ -149,8 +152,8 @@ export async function POST(req: Request) {
     const turnMinutes = target.seatedTime
       ? Math.max(1, Math.round((now.getTime() - target.seatedTime.getTime()) / 60000))
       : null;
-    await prisma.reservation.update({
-      where: { id: target.id },
+    await prisma.reservation.updateMany({
+      where: { id: target.id, restaurantId },
       data: { status: "FINISHED", finishedTime: now, turnMinutes },
     });
     return Response.json({ ok: true, finished: target.id, turnMinutes });
@@ -163,19 +166,22 @@ export async function POST(req: Request) {
 // ── PATCH: move a currently seated party without creating another seat ──
 export async function PATCH(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json();
     const toTableId = String(body.toTableId || "");
     if (!toTableId) return Response.json({ ok: false, reason: "missing_target" }, { status: 400 });
     const serviceDate = serviceDateOf(todayKey());
     const reservation = body.partyId
-      ? await prisma.reservation.findFirst({ where: { id: String(body.partyId), status: "SEATED", serviceDate } })
+      ? await prisma.reservation.findFirst({ where: { id: String(body.partyId), restaurantId, status: "SEATED", serviceDate } })
       : await prisma.reservation.findFirst({
-          where: { status: "SEATED", serviceDate, guest: { name: String(body.name || "") } },
+          where: { restaurantId, status: "SEATED", serviceDate, guest: { name: String(body.name || "") } },
           orderBy: { seatedTime: "desc" },
         });
     if (!reservation) return Response.json({ ok: false, reason: "no_seated_match" }, { status: 404 });
-    await prisma.reservationTable.deleteMany({ where: { reservationId: reservation.id } });
-    await prisma.reservationTable.create({ data: { reservationId: reservation.id, tableId: toTableId, isPrimary: true } });
+    const table = await prisma.table.findFirst({ where: { id: toTableId, restaurantId }, select: { id: true } });
+    if (!table) return Response.json({ ok: false, reason: "invalid_target" }, { status: 400 });
+    await prisma.reservationTable.deleteMany({ where: { reservationId: reservation.id, reservation: { restaurantId } } });
+    await prisma.reservationTable.create({ data: { reservationId: reservation.id, tableId: table.id, isPrimary: true } });
     return Response.json({ ok: true, moved: reservation.id });
   } catch (err) {
     console.error("[api/service-log PATCH]", err);

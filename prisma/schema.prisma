@@ -14,6 +14,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["partialIndexes"]
 }
 
 // Prisma 7: connection URLs no longer live in the schema. The CLI
@@ -68,6 +69,31 @@ enum BookingSource {
   PAPER_IMPORT
 }
 
+// ─── Tenancy ─────────────────────────────────────────────────────────
+
+/// The account boundary for every operational record. Authentication is
+/// restaurant-scoped; the client never supplies this id directly.
+model Restaurant {
+  id            String   @id @default(cuid())
+  name          String
+  nameKey       String   @unique
+  passcodeHash  String
+  recoveryEmail String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  guests            Guest[]
+  tables            Table[]
+  servers           Server[]
+  reservations      Reservation[]
+  waitlistEntries   WaitlistEntry[]
+  shifts            Shift[]
+  shiftServers      ShiftServer[]
+  floors            Floor[]
+  settings          RestaurantSettings?
+  serviceDayStaff   ServiceDayStaff[]
+}
+
 // ─── CRM ─────────────────────────────────────────────────────────────
 
 model Guest {
@@ -86,11 +112,17 @@ model Guest {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
   reservations    Reservation[]
   waitlistEntries WaitlistEntry[]
 
-  @@index([vip])
-  @@index([name])
+  @@unique([restaurantId, phone])
+  @@unique([restaurantId, email])
+  @@index([restaurantId])
+  @@index([restaurantId, vip])
+  @@index([restaurantId, name])
 }
 
 // ─── Floor & staff ───────────────────────────────────────────────────
@@ -128,13 +160,19 @@ model Table {
   assignedServerId String?
   liveUpdatedAt    DateTime?
 
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
   reservations ReservationTable[]
 
   /// Name uniqueness is enforced by a PARTIAL unique index (active rows
   /// only) that Prisma cannot express: see
   /// migration_table_name_partial_unique.sql. Soft-deleted tables keep
   /// their names for history without blocking re-imported floors.
-  @@index([active, floorId])
+  @@index([restaurantId])
+  @@index([restaurantId, active, floorId])
+  @@unique([restaurantId, floorId, name])
+  @@unique([restaurantId, floorId, name], map: "Table_restaurantId_floorId_name_active_key", where: raw("active"))
 }
 
 model Server {
@@ -154,10 +192,14 @@ model Server {
   active   Boolean  @default(true)
   createdAt DateTime @default(now())
 
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
   reservations Reservation[]
   shifts       ShiftServer[]
 
-  @@index([active])
+  @@index([restaurantId])
+  @@index([restaurantId, active])
 }
 
 // ─── Reservations (the single lifecycle table) ───────────────────────
@@ -209,11 +251,15 @@ model Reservation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
   // The four hot query shapes:
-  @@index([serviceDate, status])          // "today's board", "Oct 24 history"
-  @@index([dayOfWeek, serviceDate])       // "all past Fridays, newest first"
-  @@index([status, targetTime])           // "next UPCOMING arrivals"
-  @@index([guestId, serviceDate])         // guest visit history
+  @@index([restaurantId])
+  @@index([restaurantId, serviceDate, status]) // "today's board", "Oct 24 history"
+  @@index([restaurantId, dayOfWeek, serviceDate]) // "all past Fridays, newest first"
+  @@index([restaurantId, status, targetTime]) // "next UPCOMING arrivals"
+  @@index([restaurantId, guestId, serviceDate]) // guest visit history
 }
 
 /// Join table: which physical tables a reservation occupies. One row
@@ -260,9 +306,13 @@ model WaitlistEntry {
   shiftId String?
   shift   Shift?  @relation(fields: [shiftId], references: [id])
 
-  @@index([serviceDate, status])
-  @@index([status, arrivalTime])
-  @@index([dayOfWeek, serviceDate])
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId])
+  @@index([restaurantId, serviceDate, status])
+  @@index([restaurantId, status, arrivalTime])
+  @@index([restaurantId, dayOfWeek, serviceDate])
 }
 
 // ─── Shift: the daily rollup the AI predictor trains on ─────────────
@@ -308,13 +358,17 @@ model Shift {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
   reservations    Reservation[]
   waitlistEntries WaitlistEntry[]
   servers         ShiftServer[]
 
-  @@unique([serviceDate, period])
-  @@index([dayOfWeek, period, serviceDate]) // "past Fridays' dinners, newest first"
-  @@index([isFinalized, serviceDate])       // training-set scans
+  @@unique([restaurantId, serviceDate, period])
+  @@index([restaurantId])
+  @@index([restaurantId, dayOfWeek, period, serviceDate]) // "past Fridays' dinners, newest first"
+  @@index([restaurantId, isFinalized, serviceDate]) // training-set scans
 }
 
 /// Many-to-many with payload: which servers actually worked a shift and
@@ -329,8 +383,12 @@ model ShiftServer {
   shift  Shift  @relation(fields: [shiftId], references: [id], onDelete: Cascade)
   server Server @relation(fields: [serverId], references: [id])
 
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
   @@id([shiftId, serverId])
-  @@index([serverId])
+  @@index([restaurantId])
+  @@index([restaurantId, serverId])
 }
 
 // ─── Floor & configuration ───────────────────────────────────────────
@@ -347,6 +405,11 @@ model Floor {
   onlineExcluded Boolean @default(false)
   sortOrder    Int     @default(0)
   active       Boolean @default(true)
+
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId])
 }
 
 /// Singleton (id "main"). Typed columns only for values other systems
@@ -361,6 +424,9 @@ model RestaurantSettings {
   roles        String[] @default(["waiter", "bartender"])
   prefs        Json?
   updatedAt    DateTime @updatedAt
+
+  restaurantId String @unique
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
 }
 
 /// Per-service-day staff record: who was on shift and how the floor was
@@ -370,11 +436,17 @@ model RestaurantSettings {
 /// the AI predictor's per-shift section-history feed (which servers took
 /// which tables, and — joined to reservations — how they turned).
 model ServiceDayStaff {
-  serviceDate DateTime @id @db.Date
+  serviceDate DateTime @db.Date
   /// serverId[] on shift that day (Postgres text[]).
   roster      String[]
   /// { tableId: serverId } section map. Schemaless — table set changes
   /// with the floor layout, so a migration per re-section is wrong.
   sections    Json?
   updatedAt   DateTime @updatedAt
+
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@id([restaurantId, serviceDate])
+  @@index([restaurantId])
 }

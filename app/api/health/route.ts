@@ -6,8 +6,10 @@
 // the frontend calls it on load and renders an instruction banner for
 // anything missing. Checks are ordered from outermost failure inward.
 import { prisma } from "@/lib/prisma";
+import { requireRestaurantId } from "@/lib/tenant";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
   const report = { db: false, liveState: false, settings: false, serviceDay: false };
   try {
     await prisma.$queryRaw`SELECT 1`;
@@ -20,13 +22,13 @@ export async function GET() {
     // Selecting liveUpdatedAt fails on BOTH failure modes: column absent
     // in the database (migration unrun) or field absent from a stale
     // generated client (generate/restart skipped).
-    await prisma.table.findFirst({ select: { id: true, liveUpdatedAt: true } });
+    await prisma.table.findFirst({ where: { restaurantId }, select: { id: true, liveUpdatedAt: true } });
     report.liveState = true;
   } catch {
     report.liveState = false;
   }
   try {
-    await prisma.restaurantSettings.findUnique({ where: { id: "main" } });
+    await prisma.restaurantSettings.findUnique({ where: { restaurantId } });
     report.settings = true;
   } catch {
     report.settings = false;
@@ -34,7 +36,7 @@ export async function GET() {
   try {
     // Per-day staff table: catches the missing service_day_staff migration
     // (sections/roster assign in-memory but vanish on reload).
-    await prisma.serviceDayStaff.findFirst({ select: { serviceDate: true } });
+    await prisma.serviceDayStaff.findFirst({ where: { restaurantId }, select: { serviceDate: true } });
     report.serviceDay = true;
   } catch {
     report.serviceDay = false;

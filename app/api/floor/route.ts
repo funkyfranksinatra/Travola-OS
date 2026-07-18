@@ -15,6 +15,7 @@
 // cron job at zero infrastructure cost. The frontend applies the same
 // rule on its minute tick for a host stand left running across the tick.
 import { prisma } from "@/lib/prisma";
+import { requireRestaurantId } from "@/lib/tenant";
 import { Prisma } from "@prisma/client";
 
 type FloorIn = { id: string; name: string; isManualOnly?: boolean; onlineExcluded?: boolean };
@@ -57,12 +58,13 @@ function latestServiceResetBoundary(now: Date, openMinutes: number | null, close
 }
 
 // ── GET: layout + live state (stale live state served clean) ─────────
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const [floors, tables, settings] = await Promise.all([
-      prisma.floor.findMany({ where: { active: true }, orderBy: { sortOrder: "asc" } }),
-      prisma.table.findMany({ where: { active: true } }),
-      prisma.restaurantSettings.findUnique({ where: { id: "main" } }),
+      prisma.floor.findMany({ where: { restaurantId, active: true }, orderBy: { sortOrder: "asc" } }),
+      prisma.table.findMany({ where: { restaurantId, active: true } }),
+      prisma.restaurantSettings.findUnique({ where: { restaurantId } }),
     ]);
     const boundary = latestServiceResetBoundary(new Date(), settings?.openMinutes ?? null, settings?.closeMinutes ?? null);
 
@@ -106,6 +108,7 @@ export async function GET() {
 // ── PATCH: live-state snapshot ────────────────────────────────────────
 export async function PATCH(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json();
     const live: LiveIn[] = Array.isArray(body.tables) ? body.tables : [];
     if (live.length === 0) return Response.json({ ok: false, reason: "empty_snapshot" }, { status: 400 });
@@ -138,7 +141,7 @@ export async function PATCH(req: Request) {
         "liveUpdatedAt" = v."liveUpdatedAt"
       FROM (VALUES ${Prisma.join(rows)})
         AS v("id", "status", "party", "partySize", "seatedAt", "groupId", "assignedServerId", "liveUpdatedAt")
-      WHERE t."id" = v."id"`;
+      WHERE t."id" = v."id" AND t."restaurantId" = ${restaurantId}`;
     return Response.json({ ok: true, tables: live.length });
   } catch (err) {
     console.error("[api/floor PATCH]", err);
@@ -149,6 +152,7 @@ export async function PATCH(req: Request) {
 // ── PUT: layout snapshot (reconcile to the editor's final state) ─────
 export async function PUT(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json();
     const floors: FloorIn[] = Array.isArray(body.floors) ? body.floors : [];
     const tables: TableIn[] = Array.isArray(body.tables) ? body.tables : [];
@@ -190,24 +194,23 @@ export async function PUT(req: Request) {
     // rows within the same transaction (names are unique among ACTIVE
     // tables via a partial index — see prisma/migrations note).
     const tableValues = safeTables.map((t) =>
-      Prisma.sql`(${String(t.id)}, ${String(t.name ?? "")}, ${Math.round(t.x || 0)}, ${Math.round(
+      Prisma.sql`(${String(t.id)}, ${restaurantId}, ${String(t.name ?? "")}, ${Math.round(t.x || 0)}, ${Math.round(
         t.y || 0
       )}, ${Math.max(1, Number(t.capacity) || 2)}, ${String(t.shape || "square")}, ${String(
         t.area || "dining"
       )}, ${Math.round(Number(t.rotation) || 0)}, ${String(t.floorId || "f1")}, ${!!t.manualOnly}, ${!!t.onlineExcluded}, true)`
     );
-    await prisma.$transaction([
-      ...floors.map((f, i) =>
-        prisma.floor.upsert({
-          where: { id: String(f.id) },
-          create: { id: String(f.id), name: f.name, isManualOnly: !!f.isManualOnly, onlineExcluded: !!f.onlineExcluded, sortOrder: i, active: true },
-          update: { name: f.name, isManualOnly: !!f.isManualOnly, onlineExcluded: !!f.onlineExcluded, sortOrder: i, active: true },
-        })
-      ),
-      prisma.floor.updateMany({ where: { id: { notIn: floorIds } }, data: { active: false } }),
-      prisma.table.updateMany({ where: { id: { notIn: tableIds } }, data: { active: false } }),
-      prisma.$executeRaw`
-        INSERT INTO "Table" ("id", "name", "x", "y", "capacity", "shape", "area", "rotation", "floorId", "manualOnly", "onlineExcluded", "active")
+    await prisma.$transaction(async (tx) => {
+      for (const [i, f] of floors.entries()) {
+        const existing = await tx.floor.findFirst({ where: { id: String(f.id), restaurantId }, select: { id: true } });
+        const data = { name: f.name, isManualOnly: !!f.isManualOnly, onlineExcluded: !!f.onlineExcluded, sortOrder: i, active: true };
+        if (existing) await tx.floor.update({ where: { id: existing.id }, data });
+        else await tx.floor.create({ data: { id: String(f.id), restaurantId, ...data } });
+      }
+      await tx.floor.updateMany({ where: { restaurantId, id: { notIn: floorIds } }, data: { active: false } });
+      await tx.table.updateMany({ where: { restaurantId, id: { notIn: tableIds } }, data: { active: false } });
+      await tx.$executeRaw`
+        INSERT INTO "Table" ("id", "restaurantId", "name", "x", "y", "capacity", "shape", "area", "rotation", "floorId", "manualOnly", "onlineExcluded", "active")
         VALUES ${Prisma.join(tableValues)}
         ON CONFLICT ("id") DO UPDATE SET
           "name" = EXCLUDED."name",
@@ -220,8 +223,9 @@ export async function PUT(req: Request) {
           "floorId" = EXCLUDED."floorId",
           "manualOnly" = EXCLUDED."manualOnly",
           "onlineExcluded" = EXCLUDED."onlineExcluded",
-          "active" = true`,
-    ]);
+          "active" = true
+        WHERE "Table"."restaurantId" = ${restaurantId}`;
+    });
 
     return Response.json({ ok: true, floors: floors.length, tables: tables.length });
   } catch (err) {

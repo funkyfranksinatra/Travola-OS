@@ -15,6 +15,7 @@
 //  - everything inside one transaction: a commit either lands whole or
 //    not at all
 import { prisma } from "@/lib/prisma";
+import { requireRestaurantId } from "@/lib/tenant";
 import {
   parseResMinutes,
   buildTargetTime,
@@ -58,16 +59,17 @@ function timeOnDate(dateKey: string, raw?: string | null): Date | null {
   return new Date(y, m - 1, d, Math.floor(min / 60), min % 60);
 }
 
-async function guestIdFor(name: string): Promise<string> {
+async function guestIdFor(restaurantId: string, name: string): Promise<string> {
   const clean = name.trim() || "Guest";
-  const existing = await prisma.guest.findFirst({ where: { name: clean } });
+  const existing = await prisma.guest.findFirst({ where: { restaurantId, name: clean } });
   if (existing) return existing.id;
-  const created = await prisma.guest.create({ data: { name: clean } });
+  const created = await prisma.guest.create({ data: { restaurantId, name: clean } });
   return created.id;
 }
 
 export async function POST(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json();
     const rows: InRow[] = Array.isArray(body.rows) ? body.rows : [];
     const source = SOURCE_MAP[String(body.source || "paper").toLowerCase()] ?? "PAPER_IMPORT";
@@ -115,6 +117,7 @@ export async function POST(req: Request) {
       // target minute, same party size → already imported / already known.
       const dup = await prisma.reservation.findFirst({
         where: {
+          restaurantId,
           serviceDate: serviceDateOf(dateKey),
           partySize: size,
           targetTime,
@@ -124,7 +127,7 @@ export async function POST(req: Request) {
       });
       if (dup) { results.duplicates++; continue; }
 
-      const guestId = await guestIdFor(name);
+      const guestId = await guestIdFor(restaurantId, name);
       const tableDbIds =
         r.tableId != null && r.tableId !== ""
           ? String(r.tableId).split("_").map(String)
@@ -132,12 +135,13 @@ export async function POST(req: Request) {
       // Only link tables that actually exist — imports may reference
       // labels from the OLD system's floor.
       const existingTables = tableDbIds.length
-        ? await prisma.table.findMany({ where: { id: { in: tableDbIds } }, select: { id: true } })
+        ? await prisma.table.findMany({ where: { restaurantId, id: { in: tableDbIds } }, select: { id: true } })
         : [];
 
       creates.push(() =>
         prisma.reservation.create({
           data: {
+            restaurantId,
             guestId,
             partySize: size,
             status,

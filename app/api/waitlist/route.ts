@@ -8,6 +8,7 @@
 // LEFT entries are the predictor's wait-tolerance signal — another
 // deliberate soft delete.
 import { prisma } from "@/lib/prisma";
+import { requireRestaurantId } from "@/lib/tenant";
 import { dayOfWeekOf, serviceDateOf, todayKey, waitlistToApp } from "@/lib/db-mappers";
 
 // Same service-day boundary the floor route uses: close + 90 minutes
@@ -29,22 +30,23 @@ function latestServiceResetBoundary(now: Date, openMinutes: number | null, close
 }
 
 // ── GET: the live queue ───────────────────────────────────────────────
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     // Lazy stale-entry sweep: mark anyone who arrived before the latest
     // close+90 boundary and never got seated as LEFT (walked out).
     // leftTime is stamped at the boundary itself — the truthful "gone by"
     // moment — and LEFT rows keep feeding the predictor's wait-tolerance
     // signal, exactly like a manual walk-away.
-    const settings = await prisma.restaurantSettings.findUnique({ where: { id: "main" } });
+    const settings = await prisma.restaurantSettings.findUnique({ where: { restaurantId } });
     const boundary = latestServiceResetBoundary(new Date(), settings?.openMinutes ?? null, settings?.closeMinutes ?? null);
     await prisma.waitlistEntry.updateMany({
-      where: { status: { in: ["WAITING", "NOTIFIED"] }, arrivalTime: { lt: boundary } },
+      where: { restaurantId, status: { in: ["WAITING", "NOTIFIED"] }, arrivalTime: { lt: boundary } },
       data: { status: "LEFT", leftTime: boundary },
     });
 
     const rows = await prisma.waitlistEntry.findMany({
-      where: { status: "WAITING" },
+      where: { restaurantId, status: "WAITING" },
       orderBy: { arrivalTime: "asc" },
     });
     return Response.json({ waitlist: rows.map(waitlistToApp) });
@@ -57,10 +59,12 @@ export async function GET() {
 // ── POST: add a party (walk-in, or a reservation moved to the queue) ──
 export async function POST(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json();
     const date = todayKey();
     const created = await prisma.waitlistEntry.create({
       data: {
+        restaurantId,
         ...(body.id ? { id: String(body.id) } : {}),
         name: String(body.name || "Walk-In"),
         partySize: Math.max(1, Number(body.size) || 1),
@@ -80,9 +84,10 @@ export async function POST(req: Request) {
 // ── PATCH: edits and seating (unknown id = 200 no-op, see reservations) ─
 export async function PATCH(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json();
     const id = String(body.id || "");
-    const existing = await prisma.waitlistEntry.findUnique({ where: { id } });
+    const existing = await prisma.waitlistEntry.findFirst({ where: { id, restaurantId } });
     if (!existing) return Response.json({ ok: false, reason: "not_found" });
 
     const data: Record<string, unknown> = {};
@@ -100,7 +105,7 @@ export async function PATCH(req: Request) {
     }
 
     if (Object.keys(data).length > 0) {
-      await prisma.waitlistEntry.update({ where: { id }, data });
+      await prisma.waitlistEntry.updateMany({ where: { id, restaurantId }, data });
     }
     return Response.json({ ok: true });
   } catch (err) {
@@ -112,10 +117,11 @@ export async function PATCH(req: Request) {
 // ── DELETE: soft — the party LEFT ─────────────────────────────────────
 export async function DELETE(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json().catch(() => ({}));
     const id = String(body.id || new URL(req.url).searchParams.get("id") || "");
     await prisma.waitlistEntry.updateMany({
-      where: { id, status: "WAITING" },
+      where: { id, restaurantId, status: "WAITING" },
       data: { status: "LEFT", leftTime: new Date() },
     });
     return Response.json({ ok: true });
