@@ -22,6 +22,7 @@
 // perfection from a human 13,000 times.
 import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
+import { IMPORT_MODEL } from "@/lib/ai-models";
 import { z } from "zod";
 
 export const maxDuration = 60;
@@ -83,7 +84,7 @@ export async function POST(req: Request) {
       .join("\n");
 
     const result = await generateObject({
-      model: openai(process.env.IMPORT_MODEL || "gpt-4o"),
+      model: openai(IMPORT_MODEL),
       schema: mappingSchema,
       prompt: `You are mapping the columns of a restaurant reservation-history export (declared source: ${source}) so a deterministic parser can import EVERY row.
 

@@ -8,12 +8,13 @@
 // /api/import/commit. The extractor is allowed to be imperfect; the
 // review gate is what makes the feature safe.
 //
-// Model: defaults to full gpt-4o, NOT 4o-mini — handwriting and dense
-// report tables are exactly where mini-class models fall down, and
+// Model: defaults to full GPT-5.6 — handwriting and dense
+// report tables need the full vision model, and
 // imports are low-frequency (transition-time, not per-seating), so the
 // cost delta is negligible. Override with IMPORT_MODEL if desired.
 import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
+import { IMPORT_MODEL } from "@/lib/ai-models";
 import { z } from "zod";
 
 export const maxDuration = 60;
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
       return Response.json({ error: "too_many_pages", max: MAX_PAGES_PER_REQUEST }, { status: 400 });
     }
 
-    const model = openai(process.env.IMPORT_MODEL || "gpt-4o");
+    const model = openai(IMPORT_MODEL);
     const out: Array<z.infer<typeof rowSchema> & { page: number }> = [];
     let pageDate: string | null = null;
     const pageErrors: Array<{ page: number; error: string }> = [];

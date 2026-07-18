@@ -2885,7 +2885,7 @@ function PredictorView({ forecast = null, loading = false, error = null, onRefre
         {loading && !f && (
           <div className="bg-panel border border-border rounded-2xl p-10 text-center">
             <div className="font-mono text-[10px] text-ai tracking-[0.2em] uppercase animate-pulse">◆ Building the shift forecast…</div>
-            <div className="font-mono text-[10px] text-ink-400 mt-3 leading-relaxed">Researching this date on the web — local events, access, competitors, promotions, reviews, buzz and season. The first forecast of a date can take up to ~40s; after that it's cached.</div>
+            <div className="font-mono text-[10px] text-ink-400 mt-3 leading-relaxed">Researching this date on the web — local events, access, competitors, promotions, reviews, buzz and season. The first forecast of a date can take a minute or two; after that it's cached.</div>
           </div>
         )}
         {error && !f && (
