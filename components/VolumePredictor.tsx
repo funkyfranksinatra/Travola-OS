@@ -9,7 +9,7 @@ import { useState } from 'react';
 // cards. Each card shows: dayOfWeek + date, predictedVolume + %change,
 // staffing alert badge, reasoning, key-factor tags.
 //
-// Visual language inherits from MesaOS: bg-panel-card surfaces, cyan
+// Visual language inherits from Travola: bg-panel-card surfaces, cyan
 // (bg-ai) for CTAs and headers, ink-50/400 text scale, font-display
 // for headlines, font-mono for numbers and tags.
 //

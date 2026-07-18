@@ -1,6 +1,6 @@
 {
-  "name": "MesaOS Host",
-  "short_name": "MesaOS",
+  "name": "Travola Host",
+  "short_name": "Travola",
   "description": "Front-of-house host stand: live floor, seating, waitlist, and service log.",
   "id": "/host",
   "start_url": "/host",

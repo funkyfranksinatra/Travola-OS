@@ -1,4 +1,4 @@
-// app/host/page.tsx — MesaOS Host: the front-of-house iPad app.
+// app/host/page.tsx — Travola Host: the front-of-house iPad app.
 //
 // Same live floor, same data, same seating flows as the manager site —
 // minus everything that changes the restaurant itself. Floorplan

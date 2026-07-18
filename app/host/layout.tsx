@@ -9,13 +9,13 @@
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "MesaOS Host",
+  title: "Travola Host",
   description: "Front-of-house host stand: live floor, seating, waitlist, and service log.",
   manifest: "/host.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "MesaOS Host",
+    title: "Travola Host",
   },
   icons: {
     apple: "/icons/host-180.png",

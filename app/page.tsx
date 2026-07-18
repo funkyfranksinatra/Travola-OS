@@ -7,7 +7,7 @@ import { buildSectionPlan } from '../utils/assigner';
 // Note 2: If your project uses the '@/' alias, it would be '@/utils/assigner'.
 
 // ─────────────────────────────────────────────────────────────────────
-// MesaOS — v1.2 (Web Edition - Clean Build)
+// Travola — v1.2 (Web Edition - Clean Build)
 // ─────────────────────────────────────────────────────────────────────
 
 // ─── INITIAL DATA ────────────────────────────────────────────────────
@@ -355,7 +355,7 @@ function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, o
   return (
     <header className="flex items-center px-6 h-14 bg-panel border-b border-border flex-shrink-0">
       <div className="flex items-baseline gap-2.5 mr-8">
-        <span className="font-display text-base font-bold tracking-wide text-ai">MesaOS</span>
+        <span className="font-display text-base font-bold tracking-wide text-ai">Travola</span>
         <span className="font-mono text-[9px] text-ink-400 tracking-[0.2em] uppercase">{hostMode ? 'Host' : 'v1.2'}</span>
       </div>
       <nav className="flex h-full items-stretch">
@@ -4263,7 +4263,7 @@ function cropCanvasRegion(canvas, rect, cvW) {
 }
 
 // ── Floor-plan migration overlay ─────────────────────────────────────
-// Photo/screenshot of a previous system's floor → proposed MesaOS floor.
+// Photo/screenshot of a previous system's floor → proposed Travola floor.
 // One photo = one floor. The review step renders a to-scale PREVIEW of
 // the proposed layout (the fastest way to judge extraction quality) plus
 // an editable table list. Nothing commits until the host approves.
@@ -4474,7 +4474,7 @@ function FloorMigrateOverlay({ tables: existingTables, floors: existingFloors, o
         <div className="px-6 py-4 border-b border-border-hi flex items-center justify-between flex-shrink-0">
           <div>
             <h2 className="font-display text-lg font-bold text-ink-50">Migrate floor plan</h2>
-            <p className="font-mono text-[10px] text-ink-400 mt-0.5">Photo or screenshot of your previous system → a matching MesaOS floor. One image per floor. Opens straight in Edit Layout — Cancel Migration restores the previous plan.</p>
+            <p className="font-mono text-[10px] text-ink-400 mt-0.5">Photo or screenshot of your previous system → a matching Travola floor. One image per floor. Opens straight in Edit Layout — Cancel Migration restores the previous plan.</p>
           </div>
           <button onClick={onClose} className="text-ink-400 hover:text-ink-50 text-xl leading-none px-1" aria-label="Close">×</button>
         </div>
@@ -5178,7 +5178,7 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
             <div className="flex items-center justify-between gap-4 bg-panel-card border border-border rounded-lg px-4 py-3">
               <div className="flex flex-col gap-0.5 min-w-0 pr-2">
                 <span className="text-sm text-ink-50 font-semibold">Migrate floor plan</span>
-                <span className="font-mono text-[10px] text-ink-400 leading-snug">Photograph or screenshot your previous system's floor plan and get a matching MesaOS floor — table numbers, shapes, seat counts and placement identified automatically, opened in Edit Layout for adjustments. Re-importing a floor with the same name replaces it; Cancel Migration restores the previous plan.</span>
+                <span className="font-mono text-[10px] text-ink-400 leading-snug">Photograph or screenshot your previous system's floor plan and get a matching Travola floor — table numbers, shapes, seat counts and placement identified automatically, opened in Edit Layout for adjustments. Re-importing a floor with the same name replaces it; Cancel Migration restores the previous plan.</span>
               </div>
               <button
                 onClick={() => onOpenMigrate && onOpenMigrate()}
@@ -5390,7 +5390,7 @@ function normalizeImportStatus(raw) {
   return 'unknown';
 }
 
-// "Table 12" / "T12" / "12" → the matching MesaOS table id (type
+// "Table 12" / "T12" / "12" → the matching Travola table id (type
 // preserved), or null. Old-system labels that don't exist here stay
 // unmatched — history is still valuable without a table link.
 function matchTableByLabel(tablesList, label) {
@@ -6800,7 +6800,7 @@ function ServiceHistoryRow({ h }) {
 // Always-visible right rail on the floor: who's seated, at a glance,
 // with the day's history scrolling beneath. Deliberately on the RIGHT
 // and never collapsed — the concept (a service journal) is industry-
-// standard; this expression is MesaOS's own.
+// standard; this expression is Travola's own.
 // Seating assistant, docked where the Service Log lives. The old version
 // was a fixed bottom-center card that covered a large slice of the floor
 // exactly when the host needed to SEE the floor to pick a table. While a
