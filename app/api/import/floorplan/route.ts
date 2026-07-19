@@ -22,6 +22,7 @@
 import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { IMPORT_MODEL } from "@/lib/ai-models";
+import { requireRestaurantId } from "@/lib/tenant";
 import { z } from "zod";
 
 export const maxDuration = 60;
@@ -90,6 +91,7 @@ type TileIn = { index: number; image: string };
 
 export async function POST(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response;
     const body = await req.json();
     const model = openai(IMPORT_MODEL);
 

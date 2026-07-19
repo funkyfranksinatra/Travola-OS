@@ -7,6 +7,7 @@
 // history (the client enforces read-only; this route 409s a past write
 // as defense in depth). Also the predictor's per-shift section feed.
 import { prisma } from "@/lib/prisma";
+import { requireRestaurantId } from "@/lib/tenant";
 import { serviceDateOf, todayKey } from "@/lib/db-mappers";
 
 const dateParam = (req: Request) => {
@@ -17,9 +18,10 @@ const dateParam = (req: Request) => {
 // ── GET: the viewed day's roster + sections (empty default) ──────────
 export async function GET(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const dateKey = dateParam(req);
     const row = await prisma.serviceDayStaff.findUnique({
-      where: { serviceDate: serviceDateOf(dateKey) },
+      where: { restaurantId_serviceDate: { restaurantId, serviceDate: serviceDateOf(dateKey) } },
     });
     return Response.json({
       date: dateKey,
@@ -36,6 +38,7 @@ export async function GET(req: Request) {
 // ── PUT: save the viewed day's roster + sections ─────────────────────
 export async function PUT(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json();
     const dateKey = typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date)
       ? body.date
@@ -51,8 +54,8 @@ export async function PUT(req: Request) {
       body.sections && typeof body.sections === "object" ? body.sections : {};
 
     await prisma.serviceDayStaff.upsert({
-      where: { serviceDate: serviceDateOf(dateKey) },
-      create: { serviceDate: serviceDateOf(dateKey), roster, sections },
+      where: { restaurantId_serviceDate: { restaurantId, serviceDate: serviceDateOf(dateKey) } },
+      create: { restaurantId, serviceDate: serviceDateOf(dateKey), roster, sections },
       update: { roster, sections },
     });
     return Response.json({ ok: true, date: dateKey });

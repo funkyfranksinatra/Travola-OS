@@ -1,15 +1,17 @@
 import { prisma } from "@/lib/prisma";
+import { requireRestaurantId } from "@/lib/tenant";
 
 // GET /api/assigner-stats — shift-history inputs for the section planner.
 // perServer: each server's average covers served per recorded night —
 // the planner normalizes these into section-size weights. expectedCovers:
 // tonight's likely volume (same weekday first, overall fallback). All
 // failures degrade to empty stats: the planner falls back to even split.
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const rows = await prisma.shiftServer.groupBy({
       by: ["serverId"],
-      where: { coversServed: { gt: 0 } },
+      where: { restaurantId, coversServed: { gt: 0 } },
       _avg: { coversServed: true },
       _count: { serverId: true },
     });
@@ -23,7 +25,7 @@ export async function GET() {
     }
     const dow = new Date().getDay();
     const sameDay = await prisma.shift.aggregate({
-      where: { actualCovers: { gt: 0 }, dayOfWeek: dow },
+      where: { restaurantId, actualCovers: { gt: 0 }, dayOfWeek: dow },
       _avg: { actualCovers: true },
       _count: true,
     });
@@ -31,7 +33,7 @@ export async function GET() {
       sameDay._count > 0 ? sameDay._avg.actualCovers : null;
     if (!expectedCovers) {
       const anyDay = await prisma.shift.aggregate({
-        where: { actualCovers: { gt: 0 } },
+        where: { restaurantId, actualCovers: { gt: 0 } },
         _avg: { actualCovers: true },
         _count: true,
       });

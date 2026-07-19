@@ -9155,6 +9155,10 @@ export default function Home({ hostMode = false } = {}) {
           fetch('/api/servers'),
           fetch('/api/settings'),
         ]);
+        if ([resR, wlR, floorR, srvR, setR].some((response) => response.status === 401)) {
+          window.location.replace(hostMode ? '/login?host=1' : '/login');
+          return;
+        }
         if (!resR.ok || !wlR.ok) throw new Error(`HTTP ${resR.status}/${wlR.status}`);
         const resData = await resR.json();
         const wlData = await wlR.json();

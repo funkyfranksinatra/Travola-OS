@@ -58,6 +58,15 @@ async function main() {
   await prisma.guest.deleteMany();
   await prisma.table.deleteMany();
   await prisma.server.deleteMany();
+  await prisma.floor.deleteMany();
+  await prisma.restaurantSettings.deleteMany();
+  await prisma.restaurant.deleteMany();
+
+  const restaurant = await prisma.restaurant.create({
+    data: { name: "Seed Restaurant", nameKey: "seed restaurant", passcodeHash: "seed-only" },
+  });
+  await prisma.restaurantSettings.create({ data: { id: restaurant.id, restaurantId: restaurant.id } });
+  await prisma.floor.create({ data: { id: "f1", name: "Dining", restaurantId: restaurant.id } });
 
   // ── Floor: ids match the frontend's numeric table ids ─────────────
   const TABLES: Array<[string, string, number, number, number]> = [
@@ -70,7 +79,7 @@ async function main() {
   ];
   await prisma.table.createMany({
     data: TABLES.map(([id, name, capacity, x, y]) => ({
-      id, name, capacity, x, y, shape: "square", area: "dining", floorId: "f1",
+      id, restaurantId: restaurant.id, name, capacity, x, y, shape: "square", area: "dining", floorId: "f1",
     })),
   });
 
@@ -84,7 +93,7 @@ async function main() {
         ["Dre", "#38bdf8"],
       ] as const
     ).map(([name, colorHex]) =>
-      prisma.server.create({ data: { name, colorHex, roles: ["waiter"] } })
+      prisma.server.create({ data: { restaurantId: restaurant.id, name, colorHex, roles: ["waiter"] } })
     )
   );
   const staff = [priya, marcus, sofia, dre];
@@ -105,7 +114,7 @@ async function main() {
   ];
   const guests: Record<string, string> = {};
   for (const [name, vip, totalVisits, notes] of guestDefs) {
-    const g = await prisma.guest.create({ data: { name, vip, totalVisits, notes } });
+    const g = await prisma.guest.create({ data: { restaurantId: restaurant.id, name, vip, totalVisits, notes } });
     guests[name] = g.id;
   }
 
@@ -126,6 +135,7 @@ async function main() {
   for (const r of upcoming) {
     await prisma.reservation.create({
       data: {
+        restaurantId: restaurant.id,
         id: r.id,
         guestId: guests[r.guest],
         partySize: r.size,
@@ -144,10 +154,10 @@ async function main() {
   const minutesAgo = (n: number) => new Date(Date.now() - n * 60000);
   await prisma.waitlistEntry.createMany({
     data: [
-      { id: "a1", name: "Walsh family", partySize: 4, source: "WALK_IN", arrivalTime: minutesAgo(2), guestId: guests["Walsh"], serviceDate: serviceDateOf(today), dayOfWeek: dowOf(today) },
-      { id: "a2", name: "Bergström", partySize: 2, source: "WALK_IN", arrivalTime: minutesAgo(5), guestId: guests["Bergström"], serviceDate: serviceDateOf(today), dayOfWeek: dowOf(today) },
-      { id: "a3", name: "Okonkwo", partySize: 6, source: "MESAOS", arrivalTime: minutesAgo(1), guestId: guests["Okonkwo"], serviceDate: serviceDateOf(today), dayOfWeek: dowOf(today) },
-      { id: "a4", name: "Tanaka party", partySize: 10, source: "WALK_IN", arrivalTime: minutesAgo(3), guestId: guests["Tanaka"], serviceDate: serviceDateOf(today), dayOfWeek: dowOf(today) },
+      { id: "a1", restaurantId: restaurant.id, name: "Walsh family", partySize: 4, source: "WALK_IN", arrivalTime: minutesAgo(2), guestId: guests["Walsh"], serviceDate: serviceDateOf(today), dayOfWeek: dowOf(today) },
+      { id: "a2", restaurantId: restaurant.id, name: "Bergström", partySize: 2, source: "WALK_IN", arrivalTime: minutesAgo(5), guestId: guests["Bergström"], serviceDate: serviceDateOf(today), dayOfWeek: dowOf(today) },
+      { id: "a3", restaurantId: restaurant.id, name: "Okonkwo", partySize: 6, source: "MESAOS", arrivalTime: minutesAgo(1), guestId: guests["Okonkwo"], serviceDate: serviceDateOf(today), dayOfWeek: dowOf(today) },
+      { id: "a4", restaurantId: restaurant.id, name: "Tanaka party", partySize: 10, source: "WALK_IN", arrivalTime: minutesAgo(3), guestId: guests["Tanaka"], serviceDate: serviceDateOf(today), dayOfWeek: dowOf(today) },
     ],
   });
 
@@ -160,6 +170,7 @@ async function main() {
     const covers = 78 + w * 6; // gentle variety across weeks
     const shift = await prisma.shift.create({
       data: {
+        restaurantId: restaurant.id,
         serviceDate: serviceDateOf(key),
         period: "DINNER",
         dayOfWeek: dowOf(key),
@@ -179,6 +190,7 @@ async function main() {
         finalizedAt: at(key, 23, 30),
         servers: {
           create: staff.map((s, i) => ({
+            restaurantId: restaurant.id,
             serverId: s.id,
             coversServed: Math.floor(covers / 4) + (i === 0 ? covers % 4 : 0),
             tablesWorked: 3 + (i % 2),
@@ -194,6 +206,7 @@ async function main() {
       const tableId = String((i * 2 + w) % 14 + 1);
       await prisma.reservation.create({
         data: {
+          restaurantId: restaurant.id,
           guestId: guests[guestNames[(i + w * 2) % guestNames.length]],
           partySize: 2 + (i % 4) * 2,
           status: "FINISHED",
@@ -217,6 +230,7 @@ async function main() {
   // will tick up in place.
   await prisma.shift.create({
     data: {
+      restaurantId: restaurant.id,
       serviceDate: serviceDateOf(today),
       period: "DINNER",
       dayOfWeek: dowOf(today),

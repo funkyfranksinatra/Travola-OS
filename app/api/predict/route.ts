@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { requireRestaurantId } from "@/lib/tenant";
 import { RESEARCH_MODEL } from "@/lib/ai-models";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
@@ -55,19 +56,6 @@ import { openai } from "@ai-sdk/openai";
 export const maxDuration = 180;
 
 const DAY = 24 * 60 * 60 * 1000;
-
-// Single-tenant location default. Resolution order at request time:
-//   RestaurantSettings.prefs.location (edited in Settings → Location)
-//   → RESTAURANT_* env vars → this constant.
-// When the schema goes multi-restaurant this constant is removed and
-// location comes off the restaurant row; until then it means the
-// predictor's weather + live-web research work with zero configuration.
-const DEFAULT_LOCATION = {
-  name: "Volario's",
-  lat: "39.9197758",
-  lon: "-105.7904009",
-  address: "",
-};
 
 const dateStr = (d: Date) => d.toISOString().slice(0, 10);
 const median = (a: number[]) => {
@@ -224,7 +212,7 @@ async function researchHalf(cacheKey: string, prompt: string, keys: AspectKey[])
   return data;
 }
 
-async function researchLocalFactors(location: string, name: string | undefined, date: string): Promise<Research | null> {
+async function researchLocalFactors(restaurantId: string, location: string, name: string | undefined, date: string): Promise<Research | null> {
   const venue = name ? `${name}, located at/near ${location}` : `the restaurant located at/near ${location}`;
   const areaPrompt = `Research area demand factors for a restaurant for the evening of ${date}.
 Restaurant: ${venue}.
@@ -251,7 +239,7 @@ Respond with ONLY a JSON object, no prose, no code fences:
 {"reviews":{"found":boolean,"summary":"one short sentence citing what you found, or 'nothing significant'","impactPct":int},"virality":{...},"economy":{...},"community":{...}}
 impactPct = estimated effect on that night's covers. Bounds: reviews -10..10, virality 0..25, economy -10..10, community 0..10. Use 0 when nothing significant. Never invent specifics — report only what the searches actually surfaced.`;
 
-  const base = `${location}|${name || ""}|${date}`;
+  const base = `${restaurantId}|${location}|${name || ""}|${date}`;
   const [area, venueRes] = await Promise.all([
     researchHalf(`${base}|area`, areaPrompt, ["events", "construction", "competitor", "promotions"]),
     researchHalf(`${base}|venue`, venuePrompt, ["reviews", "virality", "economy", "community"]),
@@ -262,6 +250,7 @@ impactPct = estimated effect on that night's covers. Bounds: reviews -10..10, vi
 
 export async function POST(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json().catch(() => ({}));
     const today = new Date();
     const todayStr = dateStr(today);
@@ -280,12 +269,12 @@ export async function POST(req: Request) {
     const lyFrom = new Date(lyCenter.getTime() - 14 * DAY);
     const lyTo = new Date(lyCenter.getTime() + 14 * DAY);
 
-    // ── Location resolution (settings → env → default) ──────────────
-    const settingsRow = await prisma.restaurantSettings.findUnique({ where: { id: "main" } }).catch(() => null);
+    // ── Location resolution (settings → env) ────────────────────────
+    const settingsRow = await prisma.restaurantSettings.findUnique({ where: { restaurantId } }).catch(() => null);
     const locPref = (settingsRow?.prefs as { location?: { name?: string; lat?: string; lon?: string; address?: string } } | null)?.location || {};
-    const locName = (locPref.name || process.env.RESTAURANT_NAME || DEFAULT_LOCATION.name || "").trim() || undefined;
-    const locLat = String(locPref.lat || process.env.RESTAURANT_LAT || DEFAULT_LOCATION.lat || "").trim();
-    const locLon = String(locPref.lon || process.env.RESTAURANT_LON || DEFAULT_LOCATION.lon || "").trim();
+    const locName = (locPref.name || process.env.RESTAURANT_NAME || "").trim() || undefined;
+    const locLat = String(locPref.lat || process.env.RESTAURANT_LAT || "").trim();
+    const locLon = String(locPref.lon || process.env.RESTAURANT_LON || "").trim();
     const locAddress = (locPref.address || process.env.RESTAURANT_ADDRESS || "").trim();
     // The research call needs a location descriptor. Prefer a real
     // street address; otherwise reverse-geocode the coordinates into a
@@ -296,12 +285,12 @@ export async function POST(req: Request) {
       || (geoTown ? `${geoTown} (coordinates ${locLat}, ${locLon})` : "")
       || (locLat && locLon ? `coordinates ${locLat}, ${locLon}` : "");
     const researchP: Promise<Research | null> = researchLocation
-      ? researchLocalFactors(researchLocation, locName, target)
+      ? researchLocalFactors(restaurantId, researchLocation, locName, target)
       : Promise.resolve(null);
 
     const [recentRows, lastYearRows, bookRows, activeTables, servers, shiftServers] = await Promise.all([
       prisma.reservation.findMany({
-        where: { serviceDate: { gte: recentSince }, status: { in: ["SEATED", "FINISHED", "NO_SHOW", "CANCELLED"] } },
+        where: { restaurantId, serviceDate: { gte: recentSince }, status: { in: ["SEATED", "FINISHED", "NO_SHOW", "CANCELLED"] } },
         select: {
           serviceDate: true, dayOfWeek: true, partySize: true, status: true, source: true,
           targetTime: true, seatedTime: true, turnMinutes: true,
@@ -309,20 +298,21 @@ export async function POST(req: Request) {
         },
       }),
       prisma.reservation.findMany({
-        where: { serviceDate: { gte: lyFrom, lte: lyTo }, status: { in: ["SEATED", "FINISHED"] } },
+        where: { restaurantId, serviceDate: { gte: lyFrom, lte: lyTo }, status: { in: ["SEATED", "FINISHED"] } },
         select: { serviceDate: true, partySize: true },
       }),
       prisma.reservation.findMany({
         where: {
+          restaurantId,
           serviceDate: new Date(`${target}T00:00:00Z`),
           status: { in: ["UPCOMING", "PARTIALLY_ARRIVED", "SEATED"] },
         },
         select: { partySize: true, targetTime: true, source: true, vip: true },
       }),
-      prisma.table.findMany({ where: { active: true }, select: { capacity: true, area: true } }),
-      prisma.server.findMany({ select: { id: true, name: true, onShift: true, roles: true, aiExcluded: true } }),
+      prisma.table.findMany({ where: { restaurantId, active: true }, select: { capacity: true, area: true } }),
+      prisma.server.findMany({ where: { restaurantId }, select: { id: true, name: true, onShift: true, roles: true, aiExcluded: true } }),
       prisma.shiftServer.findMany({
-        where: { coversServed: { gt: 0 } },
+        where: { restaurantId, coversServed: { gt: 0 } },
         select: { serverId: true, coversServed: true, shift: { select: { dayOfWeek: true, serviceDate: true } } },
       }),
     ]);

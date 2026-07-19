@@ -11,6 +11,7 @@
 // Nothing is ever hard-deleted: cancellations and no-shows are training
 // data for the AI predictor (OpenTable keeps them for the same reason).
 import { prisma } from "@/lib/prisma";
+import { requireRestaurantId } from "@/lib/tenant";
 import {
   buildTargetTime,
   dayOfWeekOf,
@@ -25,19 +26,20 @@ import {
 /** Find-or-create the CRM Guest for a display name. Name isn't unique in
  *  the schema (phone/email are), so this is findFirst + create; good
  *  enough until the UI collects phone numbers. */
-async function guestIdFor(name: string): Promise<string> {
+async function guestIdFor(restaurantId: string, name: string): Promise<string> {
   const trimmed = (name || "Guest").trim() || "Guest";
-  const existing = await prisma.guest.findFirst({ where: { name: trimmed } });
+  const existing = await prisma.guest.findFirst({ where: { restaurantId, name: trimmed } });
   if (existing) return existing.id;
-  const created = await prisma.guest.create({ data: { name: trimmed } });
+  const created = await prisma.guest.create({ data: { restaurantId, name: trimmed } });
   return created.id;
 }
 
 // ── GET: the active book (UPCOMING only — seated/cancelled are history) ──
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const rows = await prisma.reservation.findMany({
-      where: { status: { in: ["UPCOMING", "PARTIALLY_ARRIVED"] } },
+      where: { restaurantId, status: { in: ["UPCOMING", "PARTIALLY_ARRIVED"] } },
       include: { guest: true, tables: true },
       orderBy: { targetTime: "asc" },
     });
@@ -51,6 +53,7 @@ export async function GET() {
 // ── POST: create a booking (client may supply its optimistic id) ──────
 export async function POST(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json();
     const date: string = body.date || todayKey();
     // status:'seated' creates a walk-in COVER RECORD: the party is being
@@ -65,11 +68,16 @@ export async function POST(req: Request) {
     }
     const targetTime = seatedNow ? new Date() : buildTargetTime(date, body.time);
     const dbIds = tableIdToDbIds(body.tableId);
+    const ownedTableIds = dbIds.length
+      ? (await prisma.table.findMany({ where: { restaurantId, id: { in: dbIds } }, select: { id: true } })).map((table) => table.id)
+      : [];
+    if (ownedTableIds.length !== dbIds.length) return Response.json({ error: "invalid_table" }, { status: 400 });
 
     const created = await prisma.reservation.create({
       data: {
         ...(body.id ? { id: String(body.id) } : {}),
-        guestId: await guestIdFor(body.name),
+        restaurantId,
+        guestId: await guestIdFor(restaurantId, body.name),
         partySize: Math.max(1, Number(body.size) || 1),
         notes: body.note && body.note !== "—" ? String(body.note) : null,
         vip: !!body.vip,
@@ -80,7 +88,7 @@ export async function POST(req: Request) {
         dayOfWeek: dayOfWeekOf(date),
         source: seatedNow ? "WALK_IN" : "MESAOS",
         tables: {
-          create: dbIds.map((tableId, i) => ({ tableId, isPrimary: i === 0 })),
+          create: ownedTableIds.map((tableId, i) => ({ tableId, isPrimary: i === 0 })),
         },
       },
       include: { guest: true, tables: true },
@@ -98,14 +106,15 @@ export async function POST(req: Request) {
 // an unknown id is a 200 no-op, not an error.
 export async function PATCH(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json();
     const id = String(body.id || "");
-    const existing = await prisma.reservation.findUnique({ where: { id } });
+    const existing = await prisma.reservation.findFirst({ where: { id, restaurantId } });
     if (!existing) return Response.json({ ok: false, reason: "not_found" });
 
     const data: Record<string, unknown> = {};
 
-    if (body.name !== undefined) data.guestId = await guestIdFor(body.name);
+    if (body.name !== undefined) data.guestId = await guestIdFor(restaurantId, body.name);
     if (body.size !== undefined) data.partySize = Math.max(1, Number(body.size) || 1);
     if (body.note !== undefined) data.notes = body.note && body.note !== "—" ? String(body.note) : null;
     if (body.vip !== undefined) data.vip = !!body.vip;
@@ -136,16 +145,20 @@ export async function PATCH(req: Request) {
 
     if (body.tableId !== undefined) {
       const dbIds = tableIdToDbIds(body.tableId);
-      await prisma.reservationTable.deleteMany({ where: { reservationId: id } });
-      if (dbIds.length > 0) {
+      const ownedTableIds = dbIds.length
+        ? (await prisma.table.findMany({ where: { restaurantId, id: { in: dbIds } }, select: { id: true } })).map((table) => table.id)
+        : [];
+      if (ownedTableIds.length !== dbIds.length) return Response.json({ ok: false, reason: "invalid_table" }, { status: 400 });
+      await prisma.reservationTable.deleteMany({ where: { reservationId: id, reservation: { restaurantId } } });
+      if (ownedTableIds.length > 0) {
         await prisma.reservationTable.createMany({
-          data: dbIds.map((tableId, i) => ({ reservationId: id, tableId, isPrimary: i === 0 })),
+          data: ownedTableIds.map((tableId, i) => ({ reservationId: id, tableId, isPrimary: i === 0 })),
         });
       }
     }
 
     if (Object.keys(data).length > 0) {
-      await prisma.reservation.update({ where: { id }, data });
+      await prisma.reservation.updateMany({ where: { id, restaurantId }, data });
     }
     return Response.json({ ok: true });
   } catch (err) {
@@ -157,12 +170,13 @@ export async function PATCH(req: Request) {
 // ── DELETE: soft — the booking becomes CANCELLED history ──────────────
 export async function DELETE(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json().catch(() => ({}));
     const id = String(body.id || new URL(req.url).searchParams.get("id") || "");
     await prisma.reservation.updateMany({
       // serviceDate gate: past bookings are read-only history — even a
       // hand-crafted DELETE can't cancel them.
-      where: { id, status: "UPCOMING", serviceDate: { gte: serviceDateOf(todayKey()) } },
+      where: { id, restaurantId, status: "UPCOMING", serviceDate: { gte: serviceDateOf(todayKey()) } },
       data: { status: "CANCELLED", cancelledAt: new Date() },
     });
     return Response.json({ ok: true });

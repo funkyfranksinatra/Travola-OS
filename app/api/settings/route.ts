@@ -4,10 +4,12 @@
 // turn-time defaults, notification toggles — rides in `prefs` Json so
 // new host-stand knobs never require a migration.
 import { prisma } from "@/lib/prisma";
+import { requireRestaurantId } from "@/lib/tenant";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const row = await prisma.restaurantSettings.findUnique({ where: { id: "main" } });
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
+    const row = await prisma.restaurantSettings.findUnique({ where: { restaurantId } });
     if (!row) return Response.json({ settings: null });
     return Response.json({
       settings: {
@@ -24,6 +26,7 @@ export async function GET() {
 
 export async function PUT(req: Request) {
   try {
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json();
     const hours = body.restaurantHours || {};
     const data = {
@@ -33,8 +36,8 @@ export async function PUT(req: Request) {
       prefs: body.prefs ?? {},
     };
     await prisma.restaurantSettings.upsert({
-      where: { id: "main" },
-      create: { id: "main", ...data },
+      where: { restaurantId },
+      create: { id: restaurantId, restaurantId, ...data },
       update: data,
     });
     return Response.json({ ok: true });
