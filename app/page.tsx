@@ -3,6 +3,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffect } from 'react';
 import { buildSectionPlan } from '../utils/assigner'; 
+import OnboardingFlow from '../components/OnboardingFlow';
+import { notifyTour, TourOverlay } from '../components/TourOverlay';
 // Note: If Claude named the function something else, use that name here.
 // Note 2: If your project uses the '@/' alias, it would be '@/utils/assigner'.
 
@@ -111,6 +113,7 @@ const DEFAULT_PREFS = {
     lon: '-105.7904009',
     address: '',
   },
+  daysOpen: [true, true, true, true, true, true, true],
 };
 
 const INITIAL_RESERVATIONS = [];
@@ -372,7 +375,8 @@ function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, o
           : ["floor", "timeline", "waitlist", "service", "predictor", "calendar", "settings"]).map(t => (
           <button
             key={t}
-            onClick={() => setActiveTab(t)}
+            data-tour={`tab-${t}`}
+            onClick={() => { setActiveTab(t); notifyTour(`tab-${t}`); }}
             className={`px-4 text-[10.5px] font-bold tracking-[0.12em] uppercase border-b-2 transition-colors ${
               activeTab === t ? "border-ai text-ai" : "border-transparent text-ink-400 hover:text-ink-50"
             }`}
@@ -397,7 +401,7 @@ function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, o
           )}
           <span className="text-ink-400">Floor</span>
           <span className="font-semibold tabular-nums">{occupancy.occupied}/{occupancy.total}</span>
-          <span className="text-ai">{Math.round((occupancy.occupied / occupancy.total) * 100)}%</span>
+          <span className="text-ai">{occupancy.total ? Math.round((occupancy.occupied / occupancy.total) * 100) : 0}%</span>
         </div>
         <div className="flex items-center gap-1.5 px-2.5 py-1 bg-state-availBg border border-state-avail rounded text-[9px] font-mono text-state-avail tracking-[0.1em] font-semibold">
           <span className="w-1.5 h-1.5 rounded-full bg-state-avail animate-pulse" />LIVE
@@ -996,13 +1000,13 @@ function TableCreatorSidebar({ addTable, activeFloorName = 'Floor', tableCount =
       </div>
 
       {/* Zone selector */}
-      <div className="px-4 pt-4 pb-1 flex flex-col gap-1.5">
+      <div data-tour="editor-zone-picker" className="px-4 pt-4 pb-1 flex flex-col gap-1.5">
         <span className="font-mono text-[9px] text-ink-400 tracking-[0.12em] uppercase">Default zone</span>
         <div className="flex items-center gap-1 p-0.5 bg-panel-card border border-border rounded-lg">
           {['dining', 'bar', 'patio'].map(a => (
             <button
               key={a}
-              onClick={() => setArea(a)}
+              onClick={() => { setArea(a); notifyTour('zone-picked'); }}
               className={`flex-1 px-2 py-1 rounded-md font-mono text-[10px] uppercase tracking-[0.06em] transition-colors ${
                 area === a ? 'bg-ai text-bg font-bold' : 'text-ink-400 hover:text-ink-50'
               }`}
@@ -1014,7 +1018,7 @@ function TableCreatorSidebar({ addTable, activeFloorName = 'Floor', tableCount =
       </div>
 
       {/* Shape cards */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-5">
+      <div data-tour="editor-shapes" className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-5">
         {SHAPES.map(({ key, label, shape }) => {
           const cap = seatValue(key);
           const g = ghostSize(cap, shape);
@@ -1034,7 +1038,7 @@ function TableCreatorSidebar({ addTable, activeFloorName = 'Floor', tableCount =
                       e.dataTransfer.setDragImage(ghost, r.width / 2, r.height / 2);
                     }
                   }}
-                  className="group/card cursor-grab active:cursor-grabbing flex items-center justify-center"
+              className="group/card cursor-grab active:cursor-grabbing flex items-center justify-center"
                   title="Drag onto the floor to place"
                 >
                   <div
@@ -1999,7 +2003,7 @@ function FloorMap({
             toolbar carries only the EXIT, shown while editing. */}
         {editMode && (
           <>
-            <button onClick={() => {
+            <button data-tour="done-editing" onClick={() => {
                 setEditMode(false);
                 setMergeMode(false);
                 setMergeSelection([]);
@@ -2009,6 +2013,7 @@ function FloorMap({
                 // assign-click hijack doesn't compete with drag-to-rearrange.
                 setIsAssignMode && setIsAssignMode(false);
                 setAssignSelectedServer && setAssignSelectedServer(null);
+                notifyTour('editing-finished');
               }}
               className="px-3 py-1.5 rounded-lg border font-mono text-[10px] tracking-[0.1em] uppercase font-bold transition-all duration-300 bg-ai text-bg border-ai shadow-lg shadow-ai/30">
               {migrationActive ? '✓ Keep Migration' : '✓ Done Editing'}
@@ -2255,6 +2260,7 @@ function FloorMap({
               </div>
             ) : (
               <button
+                data-tour="add-floor"
                 onClick={() => setIsAddingFloor && setIsAddingFloor(true)}
                 className="px-3 py-1.5 rounded-lg border border-dashed border-gray-600 text-gray-400 text-[10px] font-mono uppercase tracking-[0.08em] hover:text-white hover:border-gray-400 transition-colors"
               >
@@ -2275,27 +2281,6 @@ function FloorMap({
                 Delete Floor
               </button>
             )}
-            {/* ─── Manual Assign Only — preserved per critical rule.
-                When true, the AI Seating Agent and AI Server Assigner
-                skip every table on this floor entirely. The 🔒 emoji
-                also appears in the tab label above when active so the
-                host has visual confirmation in both places. */}
-            <label className="flex items-center gap-2 bg-panel-card border border-border-hi rounded-lg px-2 py-1 cursor-pointer hover:border-ai transition-colors">
-              <input
-                type="checkbox"
-                checked={activeFloor?.isManualOnly || false}
-                onChange={e => {
-                  const checked = e.target.checked;
-                  setFloors && setFloors(prev => prev.map(f =>
-                    f.id === activeFloorId ? { ...f, isManualOnly: checked } : f
-                  ));
-                }}
-                className="accent-ai"
-              />
-              <span className="font-mono text-[9px] text-ink-400 tracking-[0.1em] uppercase">
-                Manual Only <span className="text-ink-50/60">(Exclude from AI)</span>
-              </span>
-            </label>
             <div className="w-px h-5 bg-border" />
             {/* ─── Undo ───────────────────────────────
                 Reverts the last structural edit — add/delete table,
@@ -2357,7 +2342,7 @@ function FloorMap({
           </button>
         </div>
       )}
-      <div id="floor-canvas" style={{ touchAction: 'none' }} className={`flex-1 relative overflow-hidden bg-panel ${editMode || mergeMode ? "ring-1 ring-ai/30 ring-inset" : ""}`}
+      <div id="floor-canvas" data-tour="editor-floor" style={{ touchAction: 'none' }} className={`flex-1 relative overflow-hidden bg-panel ${editMode || mergeMode ? "ring-1 ring-ai/30 ring-inset" : ""}`}
         onClick={() => {
           // A pan-drag ends in a click; don't let it deselect/cancel.
           if (panMovedRef.current) { panMovedRef.current = false; return; }
@@ -2392,6 +2377,7 @@ function FloorMap({
           const x = Math.round(world.x - size.width / 2);
           const y = Math.round(world.y - size.height / 2);
           addTable && addTable(data.capacity, data.shape, data.area, { x, y });
+          notifyTour('table-dropped');
         }}
         onMouseDown={startPan}
         >
@@ -2551,7 +2537,7 @@ function FloorMap({
               .sort((a, b) => parseResTime(a.time) - parseResTime(b.time));
 
             return (
-              <div key={t.id} data-table-tile data-table-id={String(t.id)}
+              <div key={t.id} data-table-tile data-table-id={String(t.id)} data-tour={editMode && visibleTables[0]?.id === t.id ? 'placed-table' : undefined}
                 ref={el => { tableRefs.current[t.id] = el; }}
                 onDragOver={(e) => {
                   // Only react to a party being dragged from the guest list —
@@ -2788,19 +2774,6 @@ function FloorMap({
                         </button>
                       ))}
                     </div>
-                  </div>
-                  {/* Per-table AI opt-out */}
-                  <div className="flex items-center justify-between gap-3">
-                    <span className="font-mono text-[10px] text-ink-400 tracking-[0.1em] uppercase">Auto-assign</span>
-                    <button
-                      onClick={() => toggleTableManualOnly && toggleTableManualOnly(pt.id)}
-                      className={`px-2.5 py-1 rounded-lg font-mono text-[9px] uppercase tracking-[0.06em] font-bold border transition-colors ${
-                        pt.manualOnly
-                          ? 'bg-panel-card text-amber-300 border-amber-500/50 hover:border-amber-400'
-                          : 'bg-panel text-ink-300 border-border hover:text-ink-50'
-                      }`}
-                      title={pt.manualOnly ? 'Excluded from AI auto-assign — click to include' : 'Included in AI auto-assign — click to exclude'}
-                    >{pt.manualOnly ? 'AI⊘ Excluded' : 'AI included'}</button>
                   </div>
                   {/* Change table number — sits under the seat control */}
                   <div className="flex items-center justify-between gap-3">
@@ -3340,6 +3313,7 @@ function TeamManagementView({
   const confirmAdd = () => {
     if (!newName.trim()) return;
     addServer && addServer(newName, newRoles, newColor);
+    notifyTour('member-added');
     setNewName(''); setNewRoles([]); setNewColor(null); setFormRoleInput(''); setAdding(false); setRoleRemoveMode(false);
   };
   const cancelAdd = () => { setNewName(''); setNewRoles([]); setNewColor(null); setFormRoleInput(''); setAdding(false); setRoleRemoveMode(false); };
@@ -3351,7 +3325,7 @@ function TeamManagementView({
       <div className="max-w-3xl mx-auto px-8 py-8 flex flex-col gap-6">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="w-8 h-8 rounded-lg border border-border bg-panel-card text-ink-400 hover:text-ink-50 hover:border-border-hi flex items-center justify-center transition-colors" title="Back to settings">←</button>
+          <button data-tour="team-back" onClick={() => { onBack(); notifyTour('team-closed'); }} className="w-8 h-8 rounded-lg border border-border bg-panel-card text-ink-400 hover:text-ink-50 hover:border-border-hi flex items-center justify-center transition-colors" title="Back to settings">←</button>
           <div className="flex flex-col">
             <h1 className="font-display text-xl font-bold text-ink-50">Team Management</h1>
             <p className="font-mono text-[11px] text-ink-400 tracking-[0.04em]">{servers.length} {servers.length === 1 ? 'member' : 'members'} · {roles.length} {roles.length === 1 ? 'role' : 'roles'}</p>
@@ -3388,7 +3362,7 @@ function TeamManagementView({
             </div>
           </div>
         ) : (
-          <button onClick={() => setAdding(true)} className="w-full py-3 rounded-xl bg-ai text-bg font-mono text-[11px] uppercase tracking-[0.1em] font-bold hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
+          <button data-tour="add-member" onClick={() => setAdding(true)} className="w-full py-3 rounded-xl bg-ai text-bg font-mono text-[11px] uppercase tracking-[0.1em] font-bold hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
             <span className="text-base leading-none">+</span> Add Team Member
           </button>
         )}
@@ -4561,7 +4535,7 @@ function FloorMigrateOverlay({ tables: existingTables, floors: existingFloors, o
   );
 }
 
-function ImportOverlay({ tables, onClose, onDone, defaultTurnMinutes = 90 }) {
+function ImportOverlay({ tables, onClose, onDone, defaultTurnMinutes = 90, showAccuracyBanner = false, onDismissAccuracyBanner }) {
   const [step, setStep] = useState('pick');            // pick | review | summary
   const [source, setSource] = useState('opentable');   // opentable | resy | paper | other
   const [defaultDate, setDefaultDate] = useState('');
@@ -4814,6 +4788,8 @@ function ImportOverlay({ tables, onClose, onDone, defaultTurnMinutes = 90 }) {
           <button onClick={onClose} className="w-8 h-8 rounded-lg flex items-center justify-center text-ink-400 hover:text-ink-50 hover:bg-panel-up text-lg">×</button>
         </div>
 
+        {showAccuracyBanner && <div className="mx-6 mt-4 rounded-lg border border-amber-500/50 bg-amber-500/10 px-4 py-3 font-mono text-[10px] leading-relaxed text-amber-100"><b>Critical to AI accuracy!</b> Migrating from OpenTable, Resy, or another platform? Export reservation history and import it here. Any data works — handwritten books, PDFs, spreadsheets — and is highly recommended. Without it, AI features run at reduced accuracy for about a month while data accumulates.<button onClick={onDismissAccuracyBanner} className="ml-3 text-amber-300 underline">dismiss</button></div>}
+
         {step === 'pick' && (
           <div className="p-6 space-y-5 overflow-auto">
             <div className="flex flex-wrap gap-6">
@@ -5020,7 +4996,8 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
   const emailDigest    = prefs.emailDigest    ?? true;
   const teamView       = prefs.teamView       ?? false;
   const location = prefs.location || {};
-  const setLoc = (field, val) => setPref && setPref('location', { ...(prefs.location || {}), [field]: val });
+  const daysOpen = Array.isArray(prefs.daysOpen) && prefs.daysOpen.length === 7 ? prefs.daysOpen : [true, true, true, true, true, true, true];
+  const setLoc = (field, val) => { setPref && setPref('location', { ...(prefs.location || {}), [field]: val }); notifyTour('location-entered'); };
   const setTwentyFourHour = (v) => setPref && setPref('twentyFourHour', v);
   const setSoundAlerts    = (v) => setPref && setPref('soundAlerts', v);
   const setAutoAssign     = (v) => setPref && setPref('autoAssign', v);
@@ -5033,6 +5010,7 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
   const setPagerAlerts    = (v) => setPref && setPref('pagerAlerts', v);
   const setEmailDigest    = (v) => setPref && setPref('emailDigest', v);
   const setTeamView       = (v) => setPref && setPref('teamView', v);
+  const setDaysOpen       = (next) => setPref && setPref('daysOpen', next);
 
   const enterEditMode = () => {
     setEditMode && setEditMode(true);
@@ -5080,7 +5058,7 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
               <span className="text-sm text-ink-50 font-semibold">Team &amp; roles</span>
               <span className="font-mono text-[10px] text-ink-400 leading-snug">{servers.length} {servers.length === 1 ? 'member' : 'members'} · add or remove staff, set colors, and manage roles.</span>
             </div>
-            <button onClick={() => setTeamView(true)} className="flex-shrink-0 px-4 py-2 rounded-lg bg-ai text-bg font-mono text-[11px] tracking-[0.08em] uppercase font-bold hover:opacity-90 transition-opacity shadow-lg shadow-ai/20">Team Management</button>
+            <button data-tour="team-management" onClick={() => { setTeamView(true); notifyTour('team-management-opened'); }} className="flex-shrink-0 px-4 py-2 rounded-lg bg-ai text-bg font-mono text-[11px] tracking-[0.08em] uppercase font-bold hover:opacity-90 transition-opacity shadow-lg shadow-ai/20">Team Management</button>
           </div>
         </section>
 
@@ -5108,7 +5086,7 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
         </section>
 
         {/* Location & live signals */}
-        <section className="bg-panel border border-border rounded-xl overflow-hidden">
+        <section data-tour="location-signals" className="bg-panel border border-border rounded-xl overflow-hidden">
           <div className="px-5 py-3 border-b border-border bg-panel-card">
             <h2 className="font-mono text-[11px] text-ink-400 tracking-[0.14em] uppercase font-bold">Location &amp; Predictor Signals</h2>
           </div>
@@ -5255,6 +5233,10 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
             </div>
             <div className="py-2.5">
               <span className={hintCls}>Type an exact time (e.g. 8:15 AM) or pick a common one. Overnight hours are supported — set close earlier than open (e.g. open 10 AM, close 1 AM) and the service day runs past midnight.</span>
+            </div>
+            <div className="py-3 flex items-center justify-between gap-3">
+              <div className={labelCls}><span className={nameCls}>Days open</span><span className={hintCls}>Closed dates return a zero-cover forecast.</span></div>
+              <div className="flex gap-1">{['S','M','T','W','T','F','S'].map((label, index) => <button key={`${label}-${index}`} onClick={() => setDaysOpen(daysOpen.map((open, i) => i === index ? !open : open))} className={`h-8 w-8 rounded-md border font-mono text-[10px] font-bold ${daysOpen[index] ? 'border-ai bg-ai/15 text-ai' : 'border-border text-ink-500'}`} title={daysOpen[index] ? 'Open' : 'Closed'}>{label}</button>)}</div>
             </div>
           </div>
         </section>
@@ -7396,7 +7378,7 @@ function ReservationDetailsSidebar({
 // ─── ROOT PAGE ───────────────────────────────────────────────────────
 
 export default function Home({ hostMode = false } = {}) {
-  const [tables,           setTables]           = useState(INITIAL_TABLES);
+  const [tables,           setTables]           = useState([]);
   // Start EMPTY: the database is the source of truth and hydration
   // fills these on mount. The hardcoded INITIAL_* seeds are loaded only
   // if hydration fails (offline / no DB) — previously they rendered for
@@ -7404,15 +7386,20 @@ export default function Home({ hostMode = false } = {}) {
   // arrived, which read as a bug.
   const [waitlist,         setWaitlist]         = useState([]);
   const [reservations,     setReservations]     = useState([]);
-  const [servers,          setServers]          = useState([
-    { id: 's1', name: 'Sarah',  onShift: true,  roles: ['waiter'], color: null },
-    { id: 's2', name: 'Mike',   onShift: true,  roles: ['waiter'], color: null },
-    { id: 's3', name: 'Devon',  onShift: false, roles: ['waiter'], color: null },
-    { id: 's4', name: 'Priya',  onShift: false, roles: ['waiter'], color: null },
-  ]);
-  const [roles, setRoles] = useState(['waiter', 'bartender']);
+  const [servers,          setServers]          = useState([]);
+  const [roles, setRoles] = useState([]);
   const [prefs, setPrefs] = useState(DEFAULT_PREFS);
   const setPref = useCallback((key, value) => setPrefs(p => ({ ...p, [key]: value })), []);
+  const onboarding = prefs.onboarding || null;
+  const setOnboardingStage = useCallback((stage) => setPrefs(p => ({ ...p, onboarding: { ...(p.onboarding || {}), stage, done: false } })), []);
+  const finishOnboarding = useCallback(() => setPrefs(p => ({ ...p, onboarding: { ...(p.onboarding || {}), stage: 'done', done: true } })), []);
+  useEffect(() => {
+    const onTourEvent = (event) => {
+      if (onboarding?.stage === 'migration' && event.detail === 'migration-committed') setOnboardingStage('editor-reposition');
+    };
+    window.addEventListener('travola-tour-event', onTourEvent);
+    return () => window.removeEventListener('travola-tour-event', onTourEvent);
+  }, [onboarding?.stage, setOnboardingStage]);
   // Autosave gate: settings only PUT after hydration has applied (or
   // conclusively failed) — otherwise the autosave effect would race the
   // GET and overwrite stored settings with defaults on every load.
@@ -7451,6 +7438,15 @@ export default function Home({ hostMode = false } = {}) {
       setSelectedCalendarDate(formatDateKey(now));
     }
     prevTabRef.current = activeTab;
+  }, [activeTab]);
+  const predictorPrewarmAt = useRef(0);
+  const prewarmPrevTabRef = useRef(null);
+  useEffect(() => {
+    if (prewarmPrevTabRef.current === 'settings' && activeTab !== 'settings' && Date.now() - predictorPrewarmAt.current > 30 * 60 * 1000) {
+      predictorPrewarmAt.current = Date.now();
+      fetch('/api/predict', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ date: formatDateKey(new Date()) }) }).catch(() => {});
+    }
+    prewarmPrevTabRef.current = activeTab;
   }, [activeTab]);
 
   // ─── Multi-floor state ───────────────────────────────────────────
@@ -7636,6 +7632,7 @@ export default function Home({ hostMode = false } = {}) {
     const n = newTables.length;
     const replaced = replacedFloorIds.size;
     setToastOk(`Migrated ${n} table${n === 1 ? '' : 's'} across ${plans.length} floor${plans.length === 1 ? '' : 's'}${replaced ? ` (${replaced} floor${replaced === 1 ? '' : 's'} replaced)` : ''} — adjust on the canvas; Keep or Cancel in the toolbar`);
+    notifyTour('migration-committed');
   };
 
   // Cancel Migration: restore the snapshot and write it back — a full,
@@ -7982,6 +7979,16 @@ export default function Home({ hostMode = false } = {}) {
   const [hostServiceLogOpen, setHostServiceLogOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [migrateOpen, setMigrateOpen] = useState(false);
+  // Resume an interrupted editor walkthrough on the correct working
+  // surface. The persisted stage survives reloads; edit mode itself does
+  // not, so restoring it here keeps the next spotlight target real.
+  useEffect(() => {
+    if (hostMode || !onboarding || onboarding.done) return;
+    if (['editor', 'editor-reposition', 'floors'].includes(onboarding.stage)) {
+      setActiveTab('floor');
+      setEditMode(true);
+    }
+  }, [hostMode, onboarding?.done, onboarding?.stage]);
   // Pre-migration snapshot; non-null = a migration awaits Keep/Cancel.
   const [migrationBackup, setMigrationBackup] = useState(null);
   // Migration tracing underlays: floorId → ghosted source photo at the
@@ -8141,7 +8148,7 @@ export default function Home({ hostMode = false } = {}) {
 
   const occupancy = useMemo(() => ({
     occupied: tables.filter(t => t.status === "dining" || t.status === "seated").length,
-    total: tables.length || 1,
+    total: tables.length,
   }), [tables]);
 
   // ─── AI Predictor — fetch on tab open, 60s cache ─────────────────
@@ -9140,10 +9147,9 @@ export default function Home({ hostMode = false } = {}) {
     });
   }, [viewDateStr, viewingPast, persist]);
 
-  // Hydrate the book + waitlist from the database on mount. On success
-  // the hardcoded seed arrays are replaced with real rows (so creating a
-  // reservation, reloading, and seeing it again Just Works); on failure
-  // the seeds remain and the app demos exactly as before.
+  // Hydrate the book + waitlist from the database on mount. The database is
+  // the source of truth: a newly registered restaurant must stay blank,
+  // including while a transient database failure is being reported.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -9692,6 +9698,85 @@ export default function Home({ hostMode = false } = {}) {
         </div>
       )}
       <Header now={now} activeTab={activeTab} setActiveTab={setActiveTab} occupancy={occupancy} coversToday={serviceLog ? serviceLog.covers.total : null} onOpenService={() => setActiveTab('service')} hostMode={hostMode} />
+      {!hostMode && hydrated && onboarding && !onboarding.done && (
+        <OnboardingFlow
+          stage={onboarding.stage || 'path'}
+          onStage={setOnboardingStage}
+          onSkip={finishOnboarding}
+          onCreate={() => { setActiveTab('floor'); setEditMode(true); }}
+          onMigrate={() => { setActiveTab('floor'); setMigrateOpen(true); }}
+          onSettings={() => setActiveTab('settings')}
+          onImport={() => setImportOpen(true)}
+          onBaseline={(baseline) => setPrefs(p => ({ ...p, baseline, onboarding: { ...(p.onboarding || {}), stage: 'wrap', done: false } }))}
+        />
+      )}
+      {!hostMode && hydrated && onboarding?.stage === 'editor' && (
+        <TourOverlay
+          onSkip={finishOnboarding}
+          onComplete={() => setOnboardingStage('floors')}
+          steps={[
+            { id: 'zone', anchor: 'editor-zone-picker', title: 'Choose a zone', body: 'Pick the zone this table belongs to. Dining is ready to go.', advanceOn: 'event:zone-picked', allowNext: true, passThrough: true },
+            { id: 'shape', anchor: 'editor-shapes', title: 'Place a table', body: 'Pick a shape, set seats, then drag it onto the floor.', advanceOn: 'event:table-dropped', passThrough: true },
+            { id: 'reposition', title: 'Set the layout', body: 'Drag tables anywhere to reposition them.', advanceOn: 'click-anywhere' },
+            { id: 'details', anchor: 'placed-table', title: 'Fine-tune a table', body: 'Tap it for delete, rotate, shape, seats, zone, and renumber controls.', advanceOn: 'click-anywhere' },
+          ]}
+        />
+      )}
+      {!hostMode && hydrated && onboarding?.stage === 'editor-reposition' && (
+        <TourOverlay
+          onSkip={finishOnboarding}
+          onComplete={() => setOnboardingStage('floors')}
+          steps={[
+            { id: 'reposition', title: 'Set the layout', body: 'Drag tables anywhere to reposition them.', advanceOn: 'click-anywhere' },
+            { id: 'details', anchor: 'placed-table', title: 'Fine-tune a table', body: 'Tap it for delete, rotate, shape, seats, zone, and renumber controls.', advanceOn: 'click-anywhere' },
+          ]}
+        />
+      )}
+      {!hostMode && hydrated && onboarding?.stage === 'floors' && (
+        <TourOverlay
+          onSkip={finishOnboarding}
+          onComplete={() => setOnboardingStage('settings')}
+          steps={[
+            { id: 'add-floor', anchor: 'add-floor', title: 'More rooms, same plan', body: 'Use + Add Floor for a patio, bar, or another room.', advanceOn: 'click-anywhere' },
+            { id: 'done', anchor: 'done-editing', title: 'Finish when you are ready', body: 'Click Done Editing anytime. You can always come back.', advanceOn: 'event:editing-finished' },
+          ]}
+        />
+      )}
+      {!hostMode && hydrated && onboarding?.stage === 'settings' && (
+        <TourOverlay
+          onSkip={finishOnboarding}
+          onComplete={() => setOnboardingStage('team')}
+          steps={[{ id: 'settings', anchor: 'tab-settings', title: 'Open Settings', body: 'Settings holds the rest of your service defaults.', advanceOn: 'event:tab-settings' }]}
+        />
+      )}
+      {!hostMode && hydrated && onboarding?.stage === 'team' && (
+        <TourOverlay
+          onSkip={finishOnboarding}
+          onComplete={() => setOnboardingStage('team-add')}
+          steps={[{ id: 'team', anchor: 'team-management', title: 'Set up your team', body: 'Open Team Management to add the people working this floor.', advanceOn: 'event:team-management-opened' }]}
+        />
+      )}
+      {!hostMode && hydrated && onboarding?.stage === 'team-add' && (
+        <TourOverlay
+          onSkip={finishOnboarding}
+          onComplete={() => setOnboardingStage('team-exit')}
+          steps={[{ id: 'member', anchor: 'add-member', title: 'Add a member', body: 'Add your first team member. You can fill in roles and colors later.', advanceOn: 'event:member-added', passThrough: true }]}
+        />
+      )}
+      {!hostMode && hydrated && onboarding?.stage === 'team-exit' && (
+        <TourOverlay
+          onSkip={finishOnboarding}
+          onComplete={() => setOnboardingStage('location')}
+          steps={[{ id: 'back', anchor: 'team-back', title: 'Back to settings', body: 'Head back when you are ready for the predictor setup.', advanceOn: 'event:team-closed' }]}
+        />
+      )}
+      {!hostMode && hydrated && onboarding?.stage === 'location' && (
+        <TourOverlay
+          onSkip={finishOnboarding}
+          onComplete={() => setOnboardingStage('history')}
+          steps={[{ id: 'location', anchor: 'location-signals', title: 'Location feeds the forecast', body: 'In Google Maps, right-click your restaurant for latitude and longitude. Add those and your street address here.', advanceOn: 'event:location-entered' }]}
+        />
+      )}
       <div className="flex-1 flex overflow-hidden min-h-0">
         {editMode && activeTab === "floor" ? (
           <TableCreatorSidebar
@@ -10107,10 +10192,13 @@ export default function Home({ hostMode = false } = {}) {
         <ImportOverlay
           tables={tables}
           defaultTurnMinutes={parseInt(prefs.turnTime, 10) || 90}
-          onClose={() => setImportOpen(false)}
+          showAccuracyBanner={prefs.importAccuracyBannerSeen === false}
+          onDismissAccuracyBanner={() => setPref('importAccuracyBannerSeen', true)}
+          onClose={() => { setImportOpen(false); if (onboarding?.stage === 'import') setOnboardingStage('baseline'); }}
           onDone={(res) => {
             setToastOk(`Imported ${res.created} record${res.created === 1 ? '' : 's'}${res.duplicates ? ` · ${res.duplicates} duplicate${res.duplicates === 1 ? '' : 's'} skipped` : ''}`);
             loadServiceLog();
+            if (onboarding?.stage === 'import') setOnboardingStage('wrap');
           }}
         />
       )}

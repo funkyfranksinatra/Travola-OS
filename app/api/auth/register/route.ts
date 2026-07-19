@@ -22,7 +22,12 @@ export async function POST(req: Request) {
     if (!name || !/^\d{4}$/.test(passcode)) return Response.json({ error: "invalid_registration" }, { status: 400 });
     const restaurant = await prisma.$transaction(async (tx) => {
       const created = await tx.restaurant.create({ data: { name, nameKey: key, passcodeHash: await hash(passcode), recoveryEmail } });
-      await tx.restaurantSettings.create({ data: { id: created.id, restaurantId: created.id, prefs: { location: { name: created.name, lat: "", lon: "", address: "" } } } });
+      await tx.restaurantSettings.create({ data: { id: created.id, restaurantId: created.id, prefs: {
+        location: { name: created.name, lat: "", lon: "", address: "" },
+        onboarding: { stage: "path", done: false },
+        importAccuracyBannerSeen: false,
+        tours: { manager: {}, host: {} },
+      } } });
       // TODO: recovery email delivery
       return created;
     });
