@@ -1,36 +1,66 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Travola
 
-## Getting Started
+Travola is a restaurant operations console for reservations, floor plans, service, waitlists, staffing, and deterministic volume forecasting. The manager view lives at `/`; the host view is `/host`.
 
-First, run the development server:
+## Run locally
+
+Requirements: Node.js 20+, an accessible Neon Postgres database, and the environment variables below. Copy `.env.example` if present, or create `.env.local`.
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). The app uses a restaurant-name plus four-digit-passcode login. Use the registered restaurant’s credentials, then create a new restaurant from the manager login if needed.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Required environment variables:
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+DATABASE_URL="postgresql://..."
+SESSION_SECRET="a-long-random-secret"
+OPENAI_API_KEY="..."
+```
 
-## Learn More
+`SESSION_SECRET` must be set for local development and for both Production and Preview in Vercel. Never reuse a development secret in production.
 
-To learn more about Next.js, take a look at the following resources:
+Useful checks:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+node node_modules/typescript/bin/tsc --noEmit
+npm run build
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+On Windows, stop the dev server before running Prisma generate or migrations so the engine DLL is not locked. Production schema changes use Prisma migrations; the tenancy migration sequence is additive backfill first, then enforcement in the same code deployment that writes the new required fields.
 
-## Deploy on Vercel
+## Architecture notes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Tenant context is held only in an httpOnly, HMAC-signed session cookie. API routes derive the restaurant ID from that cookie and scope every read and write.
+- The AI is advisory. Geometry, parsing, assignment constraints, and forecast math remain deterministic.
+- `app/page.tsx` deliberately remains the application’s large client component. Tours use small anchors and notify calls instead of a page-wide refactor.
+- Forecast setup priors are bounded, deterministic inputs and are reported in forecast factors only while history is thin.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Built with Codex + GPT-5.6
+
+This submission was built collaboratively in a Codex thread using GPT-5.6. Codex accelerated the tenancy audit, safe additive/enforce migration workflow, session-based API scoping, deterministic forecast-prior integration, and the reusable onboarding/tour layer. The collaboration kept the project’s core decision intact: AI can advise, but it does not replace deterministic restaurant operations logic.
+
+Key decisions made during the collaboration:
+
+- Per-restaurant isolation is enforced at the server boundary, never trusted from client input.
+- Restaurant setup is resumable, skippable, and persisted in settings so a front-desk device cannot be trapped in a walkthrough.
+- Tour demo state is tenant-scoped and cleaned at completion, skip, and next load to avoid polluting operational records.
+- Existing Volario’s data was preserved through the tenancy rollout and excluded from new onboarding/tour prompts.
+
+### Work record
+
+| Date | Window | Contribution | Attribution | Commit |
+| --- | --- | --- | --- | --- |
+| 2026-07-18 | Prior work | Travola rebrand and brand assets | Manual | `a5a8edf`, `e8835cb` |
+| 2026-07-18 | Prior work | GPT-5.6 model migration | Other AI tooling | `f70de8a` |
+| 2026-07-18 | Submission window | Multi-restaurant tenancy and passcode login | Codex thread | `776ff95` |
+| 2026-07-19 | Submission window | Guided restaurant onboarding and baseline setup | Codex thread | `dd4fa5d` |
+| 2026-07-19 | Submission window | First-visit manager and host feature tours | Codex thread | `7fbc7de` |
+| 2026-07-19 | Submission window | README and retained Demo Bistro fixture | Codex thread | `docs: hackathon submission README` |
+
+## Deployment
+
+Pushes to `main` deploy to Vercel. Preview deployments are protected by Vercel Authentication; test them in an authenticated browser session. Before production verification, confirm the target deployment is READY and that `SESSION_SECRET` is present in the Production environment.
