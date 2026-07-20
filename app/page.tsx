@@ -391,7 +391,6 @@ function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, o
         <div className="flex items-center gap-2 px-3 py-1 bg-panel-card border border-border-hi rounded font-mono text-[10px] text-ink-50">
           {coversToday != null && (
             <button
-              data-tour="service-log"
               onClick={onOpenService}
               className="flex items-center gap-1.5 mr-3 pr-3 border-r border-border-hi hover:text-ink-50 transition-colors"
               title="Open the service log"
@@ -1138,6 +1137,13 @@ function FloorMap({
   // Floor ⋯ menu: exclusion controls, any mode. Fixed-position anchor
   // captured from the trigger's rect so no container needs a context.
   const [floorMenu, setFloorMenu] = useState(null); // { id, x, y }
+  useEffect(() => {
+    const closeTourTransient = (event) => {
+      if ((event as CustomEvent<string>).detail === 'floor-menu') setFloorMenu(null);
+    };
+    window.addEventListener('travola-tour-advance', closeTourTransient);
+    return () => window.removeEventListener('travola-tour-advance', closeTourTransient);
+  }, []);
   // Exclusion picking mode: 'ai' | 'online' | null. Armed from the ⋯
   // menu; table clicks toggle the flag; the banner (or the menu row
   // again) disarms. Each toggle persists immediately — nothing pending.
@@ -2310,7 +2316,7 @@ function FloorMap({
             tables. Wheel-zoom works anywhere on the canvas too. */}
         <div data-floor-controls className="ml-auto flex items-center gap-1 bg-panel-card border border-border-hi rounded-lg px-1.5 py-1" onMouseDown={(e) => e.stopPropagation()}>
           <button onClick={() => zoomStep(-1)} disabled={zoom <= minimumZoom() + 0.001} className="w-11 h-11 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel disabled:opacity-30 text-xl font-bold leading-none transition-colors" title="Zoom out" aria-label="Zoom out">&minus;</button>
-          <span className="w-10 text-center font-mono text-[10px] text-ink-400 tabular-nums select-none">{zoom <= minimumZoom() + 0.001 ? '0%' : `${Math.round(zoom * 100)}%`}</span>
+          <span className="w-10 text-center font-mono text-[10px] text-ink-400 tabular-nums select-none">{`${Math.round(zoom * 100)}%`}</span>
           <button onClick={() => zoomStep(1)} disabled={zoom >= 1.9999} className="w-11 h-11 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel disabled:opacity-30 text-xl font-bold leading-none transition-colors" title="Zoom in" aria-label="Zoom in">+</button>
           <div className="w-px h-4 bg-border mx-0.5" />
           <button onClick={fitView} className="px-2 min-w-11 h-11 rounded-md flex items-center justify-center text-ink-300 hover:text-ink-50 hover:bg-panel font-mono text-[9px] uppercase tracking-[0.08em] font-bold transition-colors" title="Fit all tables" aria-label="Fit all tables">Fit</button>
@@ -5840,7 +5846,10 @@ function pctToWorld(xPct, yPct, shape, capacity, boxW = MIGRATE_WORLD.W, boxH = 
   const s = getTableSizePx(shape, capacity);
   const cx = MIGRATE_WORLD.PAD + (Math.max(0, Math.min(100, xPct)) / 100) * boxW;
   const cy = MIGRATE_WORLD.PAD + (Math.max(0, Math.min(100, yPct)) / 100) * boxH;
-  return { x: Math.round(cx - s.width / 2), y: Math.round(cy - s.height / 2) };
+  return {
+    x: Math.round(Math.max(MIGRATE_WORLD.PAD, Math.min(MIGRATE_WORLD.PAD + boxW - s.width, cx - s.width / 2))),
+    y: Math.round(Math.max(MIGRATE_WORLD.PAD, Math.min(MIGRATE_WORLD.PAD + boxH - s.height, cy - s.height / 2))),
+  };
 }
 
 // Post-mapping collision pass: extraction centers can land closer than
@@ -6908,7 +6917,7 @@ function ServiceRail({ serviceLog, now, onOpenTable, dateLabel = null, onClose =
   if (!serviceLog) return null;
   const { covers, seated, history } = serviceLog;
   return (
-    <aside className={`${overlay ? 'absolute inset-y-0 right-0 z-30 w-[min(320px,88vw)] shadow-2xl animate-[mesa-rail-in_0.2s_ease-out]' : 'w-[248px] flex-shrink-0'} border-l border-border-hi bg-panel flex flex-col overflow-hidden`}>
+    <aside data-tour="service-log" className={`${overlay ? 'absolute inset-y-0 right-0 z-30 w-[min(320px,88vw)] shadow-2xl animate-[mesa-rail-in_0.2s_ease-out]' : 'w-[248px] flex-shrink-0'} border-l border-border-hi bg-panel flex flex-col overflow-hidden`}>
       <div className="px-3 py-2.5 border-b border-border-hi flex items-baseline justify-between flex-shrink-0">
         <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-400">Service log</span>
         <div className="flex items-center gap-2"><span className="font-mono text-[11px] text-ink-50 tabular-nums">{covers.total} <span className="text-ink-400">covers</span></span>{onClose && <button onClick={onClose} className="w-11 h-11 -mr-2 flex items-center justify-center text-xl text-ink-400 hover:text-ink-50" aria-label="Close service log">×</button>}</div>
@@ -7534,8 +7543,9 @@ export default function Home({ hostMode = false } = {}) {
     }
     prewarmPrevTabRef.current = activeTab;
   }, [activeTab]);
+  const [signOutConfirm, setSignOutConfirm] = useState(false);
   const signOut = useCallback(async () => {
-    if (!window.confirm('Sign out of this restaurant?')) return;
+    setSignOutConfirm(false);
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } finally {
@@ -7701,9 +7711,21 @@ export default function Home({ hostMode = false } = {}) {
         });
       });
       separateMigratedTables(floorTables);
+      // Collision separation can nudge an edge table outward. Keep every
+      // extracted tile inside the visible tracing-photo world.
+      floorTables.forEach(table => {
+        const size = getTableSizePx(table.shape, table.capacity);
+        table.x = Math.round(Math.max(MIGRATE_WORLD.PAD, Math.min(MIGRATE_WORLD.PAD + boxW - size.width, table.x)));
+        table.y = Math.round(Math.max(MIGRATE_WORLD.PAD, Math.min(MIGRATE_WORLD.PAD + boxH - size.height, table.y)));
+      });
       newTables.push(...floorTables);
     });
-    const mergedFloors = [...floors, ...newFloors];
+    // A fresh restaurant's default empty Main Floor is only scaffolding.
+    // An imported plan replaces it rather than leaving a confusing blank
+    // extra room beside the migrated floor(s).
+    const defaultFloor = floors.find(f => f.name === 'Main Floor' && !tables.some(t => t.floorId === f.id));
+    const baseFloors = defaultFloor && newFloors.length ? floors.filter(f => f.id !== defaultFloor.id) : floors;
+    const mergedFloors = [...baseFloors, ...newFloors];
     const mergedTables = [...keptTables, ...newTables];
     setFloors(mergedFloors);
     setTables(mergedTables);
@@ -7750,15 +7772,32 @@ export default function Home({ hostMode = false } = {}) {
     setToastOk('Migration cancelled — previous floor plan restored');
   };
 
+  // Skipping setup is never a destructive cancellation. A migration the
+  // user already committed is kept, persisted immediately, and editing is
+  // exited; they can return later through Settings to refine it.
+  const skipOnboarding = () => {
+    if (migrationBackup) {
+      persistLayout(floors, tables);
+      setMigrationBackup(null);
+      setEditMode(false);
+    }
+    finishOnboarding();
+  };
+
   const addFloor = (rawName) => {
     const name = (rawName || "").trim();
     if (!name) return;
     pushHistory();
     const newId = `f${Date.now()}`;
-    setFloors(prev => [...prev, { id: newId, name, isManualOnly: false }]);
+    const nextFloors = [...floors, { id: newId, name, isManualOnly: false }];
+    setFloors(nextFloors);
     setActiveFloorId(newId);
     setNewFloorName("");
     setIsAddingFloor(false);
+    // Do not rely only on the edit-mode debounce: an onboarding user can
+    // press Done immediately after naming a room. This queued snapshot
+    // includes every floor currently on the canvas.
+    persistLayout(nextFloors, tables);
   };
 
   // New tables auto-number ascending from the highest number already in
@@ -8158,6 +8197,13 @@ export default function Home({ hostMode = false } = {}) {
   // during the component's first render.
   const [featureTour, setFeatureTour] = useState(null);
   const [featureTourStep, setFeatureTourStep] = useState(null);
+  const [tourSeatCompletions, setTourSeatCompletions] = useState({});
+  // Settings persists these for abandoned-session recovery. Refs retain
+  // the same IDs through the render that ends a just-seated demo tour.
+  const tourPartyIdsRef = useRef({});
+  const tourSeatCompletionRef = useRef({});
+  const [onboardingTourBaseline, setOnboardingTourBaseline] = useState({ stage: '', tables: 0, floors: 0, seated: 0 });
+  const [featureTourBaseline, setFeatureTourBaseline] = useState({ key: '', tables: 0, floors: 0, seated: 0 });
   const tourSurface = hostMode ? 'host' : 'manager';
   const historyImported = reservations.some(r => ['opentable', 'resy', 'paper'].includes(String(r.source || '').toLowerCase()));
   const abandonedTourSweepRef = useRef(false);
@@ -8166,6 +8212,20 @@ export default function Home({ hostMode = false } = {}) {
   const onboardingTourActive = !hostMode && !!onboarding && onboarding.done !== true;
   const featureTourEligible = hydrated && !editMode && (hostMode || onboarding?.done === true);
   const tourMutex = onboardingTourActive ? 'onboarding' : featureTour ? 'feature' : null;
+
+  // Capture progress once per tour entry. TourOverlay consumes `complete`
+  // flags generically, so actions performed while an earlier card is
+  // dismissed never leave the walkthrough narrating stale work.
+  useEffect(() => {
+    const stage = onboarding?.stage || '';
+    if (!stage || onboardingTourBaseline.stage === stage) return;
+    setOnboardingTourBaseline({ stage, tables: tables.length, floors: floors.length, seated: tables.filter(t => t.seatedPartyId).length });
+  }, [floors.length, onboarding?.stage, onboardingTourBaseline.stage, tables]);
+  useEffect(() => {
+    const key = featureTour ? `${featureTour.surface}:${featureTour.tab}` : '';
+    if (!key || featureTourBaseline.key === key) return;
+    setFeatureTourBaseline({ key, tables: tables.length, floors: floors.length, seated: tables.filter(t => t.seatedPartyId).length });
+  }, [featureTour, featureTourBaseline.key, floors.length, tables]);
 
   const clearTourState = useCallback((surface) => {
     setPrefs(p => {
@@ -8176,20 +8236,41 @@ export default function Home({ hostMode = false } = {}) {
   }, []);
 
   const discardFeatureTour = useCallback(() => {
-    const ids = Object.values(prefs.tourState?.[tourSurface]?.partyIds || {}).filter(Boolean);
+    const ids = [...new Set([
+      ...Object.values(prefs.tourState?.[tourSurface]?.partyIds || {}),
+      ...Object.values(tourPartyIdsRef.current),
+    ].filter(Boolean))];
     if (ids.length) {
       const idSet = new Set(ids);
-      // Demo parties exist only in this client session. Removing them here
-      // and clearing the persisted IDs means they never reach service
-      // history or forecast data.
+      const seatRecords = [...Object.values(tourSeatCompletions), ...Object.values(tourSeatCompletionRef.current)]
+        .filter((record) => idSet.has(record.seatRecordId) || idSet.has(record.partyId));
+      const allReservationIds = new Set([...ids, ...seatRecords.map(record => record.seatRecordId)]);
+      // Seated demo parties do use the normal pipeline so the tour shows a
+      // truthful Now Seated count. The explicit tour-only hard cleanup
+      // removes those rows again rather than teaching the predictor from a
+      // walkthrough.
+      const clearedTables = tables.map(table => idSet.has(table.seatedPartyId) || allReservationIds.has(table.seatedPartyId) || table.party === 'Tour Demo Party'
+        ? { ...table, status: 'available', party: null, partySize: null, startedAt: null, seatedPartyId: null, groupId: null }
+        : table);
+      setTables(clearedTables);
+      const cleanupRequests = [
+        ...[...allReservationIds].map(id => fetch('/api/reservations', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, tourDemo: true }) })),
+        ...ids.map(id => fetch('/api/waitlist', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, tourDemo: true }) })),
+        fetch('/api/floor', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ tables: clearedTables.map(table => ({ id: table.id, status: table.status, party: table.party, partySize: table.partySize, startedAt: table.startedAt, groupId: table.groupId, assignedServerId: table.assignedServerId })) }) }),
+      ];
+      Promise.all(cleanupRequests).catch(() => {}).finally(() => window.dispatchEvent(new Event('travola-tour-cleanup')));
       setReservations(prev => prev.filter(p => !idSet.has(p.id)));
       setWaitlist(prev => prev.filter(p => !idSet.has(p.id)));
       setSelectedPartyId(prev => idSet.has(prev) ? null : prev);
+      setSelectedTableId(null);
     }
     clearTourState(tourSurface);
+    tourPartyIdsRef.current = {};
+    tourSeatCompletionRef.current = {};
+    setTourSeatCompletions({});
     setFeatureTourStep(null);
     setFeatureTour(null);
-  }, [clearTourState, prefs.tourState, tourSurface]);
+  }, [clearTourState, prefs.tourState, tables, tourSeatCompletions, tourSurface]);
 
   const completeFeatureTour = useCallback((tour = featureTour) => {
     discardFeatureTour();
@@ -8216,12 +8297,8 @@ export default function Home({ hostMode = false } = {}) {
     abandonedTourSweepRef.current = true;
     const ids = Object.values(prefs.tourState?.[tourSurface]?.partyIds || {}).filter(Boolean);
     if (!ids.length) return;
-    const idSet = new Set(ids);
-    setReservations(prev => prev.filter(p => !idSet.has(p.id)));
-    setWaitlist(prev => prev.filter(p => !idSet.has(p.id)));
-    setSelectedPartyId(prev => idSet.has(prev) ? null : prev);
-    clearTourState(tourSurface);
-  }, [clearTourState, hydrated, prefs.tourState, tourSurface]);
+    discardFeatureTour();
+  }, [discardFeatureTour, hydrated, prefs.tourState, tourSurface]);
 
   useEffect(() => {
     if (!featureTourEligible || tourMutex || featureTour) return;
@@ -8241,34 +8318,42 @@ export default function Home({ hostMode = false } = {}) {
     if (featureTour?.tab !== 'floor' || !featureTourStep) return;
     const parties = prefs.tourState?.[tourSurface]?.partyIds || {};
     const addDemo = (kind) => {
-      if (parties[kind]) return;
+      if (parties[kind]) {
+        tourPartyIdsRef.current = { ...tourPartyIdsRef.current, [kind]: parties[kind] };
+        setSelectedPartyId(parties[kind]);
+        return;
+      }
       const id = mintId(`tour-${kind}`);
       const party = kind === 'reservation'
         ? { id, name: 'Tour Demo Party', size: 2, date: todayStr, time: new Date(now).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }), status: 'confirmed', tag: 'Tour', tourDemo: true }
         : { id, name: 'Tour Demo Party', size: 2, addedAt: now, tag: 'Tour', tourDemo: true };
       if (kind === 'reservation') setReservations(prev => [...prev, party]);
       else setWaitlist(prev => [...prev, party]);
+      // The copy says "tap a table"; make that literally sufficient.
+      setSelectedPartyId(id);
+      tourPartyIdsRef.current = { ...tourPartyIdsRef.current, [kind]: id };
       setPrefs(p => ({ ...p, tourState: { ...(p.tourState || {}), [tourSurface]: { partyIds: { ...((p.tourState || {})[tourSurface]?.partyIds || {}), [kind]: id } } } }));
     };
     if (featureTourStep === 'reservation') addDemo('reservation');
     if (featureTourStep === 'walkin') addDemo('walkin');
   }, [featureTour, featureTourStep, now, prefs.tourState, todayStr, tourSurface]);
 
-  // The floor handler remains untouched: tour clicks merely select a
-  // table, then notify the overlay. That keeps test parties out of every
-  // persistence pipeline while preserving the real table interaction.
+  // A seat tip is complete only when the real seat path changes party
+  // state. Table selection is intentionally not an advancement signal.
   useEffect(() => {
     if (featureTour?.tab !== 'floor' || !['reservation', 'walkin'].includes(featureTourStep || '')) return;
     const partyId = prefs.tourState?.[tourSurface]?.partyIds?.[featureTourStep];
-    if (!partyId) return;
-    const eventName = `tour-${featureTourStep}-seated`;
-    const onTableClick = (event) => {
-      const node = event.target instanceof Element ? event.target.closest('[data-table-tile]') : null;
-      if (node) notifyTour(eventName);
-    };
-    document.addEventListener('click', onTableClick, true);
-    return () => document.removeEventListener('click', onTableClick, true);
-  }, [featureTour, featureTourStep, prefs.tourState, tourSurface]);
+    if (partyId && tourSeatCompletions[partyId]) notifyTour(`tour-${featureTourStep}-seated`);
+  }, [featureTour, featureTourStep, prefs.tourState, tourSeatCompletions, tourSurface]);
+
+  const activeFeatureTourSteps = featureTour
+    ? featureTourSteps(featureTour.surface, featureTour.tab, historyImported).map(step => {
+      const partyId = (step.id === 'reservation' || step.id === 'walkin')
+        ? prefs.tourState?.[tourSurface]?.partyIds?.[step.id]
+        : null;
+      return { ...step, complete: !!partyId && !!tourSeatCompletions[partyId] };
+    })
+    : [];
 
 
 
@@ -8801,6 +8886,14 @@ export default function Home({ hostMode = false } = {}) {
     // them below, so covers, turn times, and history all come from one
     // lifecycle table (the queue entry keeps only the wait metrics).
     const seatRecordId = fromWaitlist ? mintId('cov') : targetPartyId;
+    if (party.tourDemo) {
+      // This is the single source of truth for the tour's seat tips: it
+      // executes only after the genuine seating pipeline has accepted a
+      // queued party, never when a table is merely selected.
+      const completion = { partyId: targetPartyId, tableId, seatRecordId, at: startedAt };
+      tourSeatCompletionRef.current = { ...tourSeatCompletionRef.current, [targetPartyId]: completion };
+      setTourSeatCompletions(prev => ({ ...prev, [targetPartyId]: completion }));
+    }
 
     // ─── Virtual-table interceptor ──────────────────────────────────
     // AI-suggested merges arrive as string ids in "i_j" format. Split
@@ -8839,6 +8932,9 @@ export default function Home({ hostMode = false } = {}) {
         return { ...t, ...patch };
       });
     });
+    // Keep the actual seated table selected for the next tour card; the
+    // panel is the subject of that card, not an implied follow-up click.
+    if (party.tourDemo && targetIds[0] != null) setSelectedTableId(targetIds[0]);
 
     if (fromWaitlist) {
       setWaitlist(prev => prev.filter(a => a.id !== targetPartyId));
@@ -9276,6 +9372,7 @@ export default function Home({ hostMode = false } = {}) {
   // until the next reload quietly loses the change. Throttled so a burst
   // of debounced retries doesn't stack banners.
   const lastPersistToastRef = useRef(0);
+  const floorLayoutWriteRef = useRef(Promise.resolve());
   const persistFailed = useCallback((detail) => {
     const nowMs = Date.now();
     if (nowMs - lastPersistToastRef.current < 5000) return;
@@ -9283,7 +9380,7 @@ export default function Home({ hostMode = false } = {}) {
     setToast(`A change didn't save (${detail}) — check the connection; it may revert on reload`);
   }, [setToast]);
   const persist = useCallback((url, method, body) => {
-    fetch(url, {
+    const send = () => fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       // keepalive: browsers abort in-flight fetches on navigation — a
@@ -9300,6 +9397,14 @@ export default function Home({ hostMode = false } = {}) {
       }
     })
       .catch(err => { console.warn(`[persist] ${method} ${url} failed:`, err); persistFailed(`${method} ${url.split('/').pop()}`); });
+    // Whole-layout snapshots are destructive reconciliations. Sending two
+    // concurrently permits an older response to arrive last and deactivate
+    // a room just added by the newer snapshot. Preserve invocation order.
+    if (url === '/api/floor' && method === 'PUT') {
+      floorLayoutWriteRef.current = floorLayoutWriteRef.current.catch(() => {}).then(send);
+      return floorLayoutWriteRef.current;
+    }
+    return send();
   }, [persistFailed]);
 
   // ── Per-service-day staff store ─────────────────────────────────────
@@ -9507,6 +9612,11 @@ export default function Home({ hostMode = false } = {}) {
       .then(d => { if (d && d.covers) setServiceLog(d); })
       .catch(() => {});
   }, [viewDateStr]);
+  useEffect(() => {
+    const refresh = () => { window.setTimeout(loadServiceLog, 0); };
+    window.addEventListener('travola-tour-cleanup', refresh);
+    return () => window.removeEventListener('travola-tour-cleanup', refresh);
+  }, [loadServiceLog]);
   const openSeatedTable = useCallback((p) => {
     // A tap on a seated party jumps to its table's live panel (clear /
     // mark bussing / details). Live panels are a today-op, so the view
@@ -9927,12 +10037,15 @@ export default function Home({ hostMode = false } = {}) {
           <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-400">Loading floor…</div>
         </div>
       )}
-      <Header now={now} activeTab={activeTab} setActiveTab={setActiveTab} occupancy={occupancy} coversToday={serviceLog ? serviceLog.covers.total : null} onOpenService={() => setActiveTab('service')} hostMode={hostMode} onReplayTips={hostMode ? replayFeatureTour : null} onSignOut={hostMode ? signOut : null} />
+      <Header now={now} activeTab={activeTab} setActiveTab={setActiveTab} occupancy={occupancy} coversToday={serviceLog ? serviceLog.covers.total : null} onOpenService={() => setActiveTab('service')} hostMode={hostMode} onReplayTips={hostMode ? replayFeatureTour : null} onSignOut={hostMode ? () => setSignOutConfirm(true) : null} />
       {featureTourEligible && tourMutex === 'feature' && featureTour && (
         <TourOverlay
-          steps={featureTourSteps(featureTour.surface, featureTour.tab, historyImported)}
+          steps={activeFeatureTourSteps}
           label="tips"
           onStepChange={(step) => setFeatureTourStep(step?.id || null)}
+          onAdvance={(step) => {
+            if (step.id === 'seated-table') setSelectedTableId(null);
+          }}
           onComplete={() => completeFeatureTour()}
           onSkip={() => completeFeatureTour()}
         />
@@ -9941,7 +10054,7 @@ export default function Home({ hostMode = false } = {}) {
         <OnboardingFlow
           stage={onboarding.stage || 'path'}
           onStage={setOnboardingStage}
-          onSkip={finishOnboarding}
+          onSkip={skipOnboarding}
           onCreate={() => { setActiveTab('floor'); setEditMode(true); }}
           onMigrate={() => { setActiveTab('floor'); setMigrateOpen(true); }}
           onSettings={() => setActiveTab('settings')}
@@ -9951,11 +10064,11 @@ export default function Home({ hostMode = false } = {}) {
       )}
       {!hostMode && hydrated && onboarding?.stage === 'editor' && (
         <TourOverlay
-          onSkip={finishOnboarding}
+          onSkip={skipOnboarding}
           onComplete={() => setOnboardingStage('floors')}
           steps={[
-            { id: 'zone', anchor: 'editor-zone-picker', title: 'Choose a zone', body: 'Pick the zone this table belongs to. Dining is ready to go.', advanceOn: 'event:zone-picked', allowNext: true, passThrough: true },
-            { id: 'shape', anchor: 'editor-shapes', title: 'Place a table', body: 'Pick a shape, set seats, then drag it onto the floor.', advanceOn: 'event:table-dropped', passThrough: true },
+            { id: 'zone', anchor: 'editor-zone-picker', title: 'Choose a zone', body: 'Pick the zone this table belongs to. Dining is ready to go.', advanceOn: 'event:zone-picked', allowNext: true, passThrough: true, complete: tables.length > onboardingTourBaseline.tables },
+            { id: 'shape', anchor: 'editor-shapes', title: 'Place a table', body: 'Pick a shape, set seats, then drag it onto the floor.', advanceOn: 'event:table-dropped', passThrough: true, complete: tables.length > onboardingTourBaseline.tables },
             { id: 'reposition', title: 'Set the layout', body: 'Drag tables anywhere to reposition them.', advanceOn: 'click-anywhere' },
             { id: 'details', anchors: ['placed-table', 'table-edit-popup'], title: 'Fine-tune a table', body: 'Tap it for delete, rotate, shape, seats, zone, and renumber controls.', advanceOn: 'click-anywhere' },
           ]}
@@ -9963,7 +10076,7 @@ export default function Home({ hostMode = false } = {}) {
       )}
       {!hostMode && hydrated && onboarding?.stage === 'editor-reposition' && (
         <TourOverlay
-          onSkip={finishOnboarding}
+          onSkip={skipOnboarding}
           onComplete={() => setOnboardingStage('floors')}
           steps={[
             { id: 'reposition', title: 'Set the layout', body: 'Drag tables anywhere to reposition them.', advanceOn: 'click-anywhere' },
@@ -9973,45 +10086,45 @@ export default function Home({ hostMode = false } = {}) {
       )}
       {!hostMode && hydrated && onboarding?.stage === 'floors' && (
         <TourOverlay
-          onSkip={finishOnboarding}
+          onSkip={skipOnboarding}
           onComplete={() => setOnboardingStage('settings')}
           steps={[
-            { id: 'add-floor', anchor: 'add-floor', title: 'More rooms, same plan', body: 'Use + Add Floor for a patio, bar, or another room.', advanceOn: 'click-anywhere' },
+            { id: 'add-floor', anchor: 'add-floor', title: 'More rooms, same plan', body: 'Use + Add Floor for a patio, bar, or another room.', advanceOn: 'click-anywhere', complete: floors.length > onboardingTourBaseline.floors },
             { id: 'done', anchor: 'done-editing', title: 'Finish when you are ready', body: 'Click Done Editing anytime. You can always come back.', advanceOn: 'event:editing-finished' },
           ]}
         />
       )}
       {!hostMode && hydrated && onboarding?.stage === 'settings' && (
         <TourOverlay
-          onSkip={finishOnboarding}
+          onSkip={skipOnboarding}
           onComplete={() => setOnboardingStage('team')}
           steps={[{ id: 'settings', anchor: 'tab-settings', title: 'Open Settings', body: 'Settings holds the rest of your service defaults.', advanceOn: 'event:tab-settings' }]}
         />
       )}
       {!hostMode && hydrated && onboarding?.stage === 'team' && (
         <TourOverlay
-          onSkip={finishOnboarding}
+          onSkip={skipOnboarding}
           onComplete={() => setOnboardingStage('team-add')}
           steps={[{ id: 'team', anchor: 'team-management', title: 'Set up your team', body: 'Open Team Management to add the people working this floor.', advanceOn: 'event:team-management-opened' }]}
         />
       )}
       {!hostMode && hydrated && onboarding?.stage === 'team-add' && (
         <TourOverlay
-          onSkip={finishOnboarding}
+          onSkip={skipOnboarding}
           onComplete={() => setOnboardingStage('team-exit')}
           steps={[{ id: 'member', anchors: ['add-member', 'add-member-form'], title: 'Add a member', body: 'Add your first team member. You can fill in roles and colors later.', advanceOn: 'event:member-added', passThrough: true }]}
         />
       )}
       {!hostMode && hydrated && onboarding?.stage === 'team-exit' && (
         <TourOverlay
-          onSkip={finishOnboarding}
+          onSkip={skipOnboarding}
           onComplete={() => setOnboardingStage('location')}
           steps={[{ id: 'back', anchor: 'team-back', title: 'Back to settings', body: 'Head back when you are ready for the predictor setup.', advanceOn: 'event:team-closed' }]}
         />
       )}
       {!hostMode && hydrated && onboarding?.stage === 'location' && (
         <TourOverlay
-          onSkip={finishOnboarding}
+          onSkip={skipOnboarding}
           onComplete={() => {
             const location = prefs.location || {};
             if (String(location.lat ?? '').trim() && String(location.lon ?? '').trim()) setOnboardingStage('settings-key');
@@ -10021,7 +10134,7 @@ export default function Home({ hostMode = false } = {}) {
       )}
       {!hostMode && hydrated && onboarding?.stage === 'settings-key' && (
         <TourOverlay
-          onSkip={finishOnboarding}
+          onSkip={skipOnboarding}
           onComplete={() => setOnboardingStage('history')}
           steps={[{ id: 'hours-days-open', anchor: 'hours-days-open', title: 'Hours shape the plan', body: 'Set your hours and days open — the forecast plans around them. Service defaults live below.', advanceOn: 'click-anywhere' }]}
         />
@@ -10053,7 +10166,7 @@ export default function Home({ hostMode = false } = {}) {
           {activeTab === "timeline" && <TimelineView reservations={todaysReservations} restaurantHours={restaurantHours} onSelectReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} />}
           {activeTab === "waitlist" && <WaitlistView waitlist={waitlist} reservations={todaysReservations} now={now} onSeatParty={seatFromWaitlist} onOpenReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} onDeleteParty={(id) => requestDelete('waitlist', id)} />}
           {activeTab === "predictor" && <PredictorView forecast={predictorData} loading={predictorLoading} error={predictorError} onRefresh={fetchPredictions} date={predictorDate} setDate={setPredictorDate} />}
-          {activeTab === "settings" && <SettingsView setEditMode={setEditMode} setActiveTab={setActiveTab} floors={floors} tables={tables} servers={servers} roles={roles} addServer={addServer} removeServer={removeServer} setServerColor={setServerColor} setServerRoles={setServerRoles} addRole={addRole} removeRole={removeRole} restaurantHours={restaurantHours} setRestaurantHours={setRestaurantHours} prefs={prefs} setPref={setPref} onResetLiveFloor={resetLiveFloor} onOpenImport={() => setImportOpen(true)} onOpenMigrate={() => setMigrateOpen(true)} onReplayTips={replayFeatureTour} restaurantName={restaurantName} onSignOut={signOut} />}
+          {activeTab === "settings" && <SettingsView setEditMode={setEditMode} setActiveTab={setActiveTab} floors={floors} tables={tables} servers={servers} roles={roles} addServer={addServer} removeServer={removeServer} setServerColor={setServerColor} setServerRoles={setServerRoles} addRole={addRole} removeRole={removeRole} restaurantHours={restaurantHours} setRestaurantHours={setRestaurantHours} prefs={prefs} setPref={setPref} onResetLiveFloor={resetLiveFloor} onOpenImport={() => setImportOpen(true)} onOpenMigrate={() => setMigrateOpen(true)} onReplayTips={replayFeatureTour} restaurantName={restaurantName} onSignOut={() => setSignOutConfirm(true)} />}
           {activeTab === "calendar" && (
             <CalendarView
               calendarMonth={calendarMonth}
@@ -10337,6 +10450,13 @@ export default function Home({ hostMode = false } = {}) {
           setConfirmDelete(null);
         }}
         onCancel={() => setConfirmDelete(null)}
+      />}
+      {signOutConfirm && <ConfirmDialog
+        title="Sign out?"
+        message="You will return to the Travola sign-in screen."
+        confirmLabel="Sign out"
+        onConfirm={signOut}
+        onCancel={() => setSignOutConfirm(false)}
       />}
       {forceSeatTarget && (() => {
         // Resolve virtual "i_j" ids (AI-suggested or merge-and-seat
