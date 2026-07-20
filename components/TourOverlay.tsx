@@ -28,12 +28,13 @@ export function useTour() { return useContext(TourContext); }
 
 type Rect = { top: number; left: number; width: number; height: number } | null;
 
-export function TourOverlay({ steps, active = true, onComplete, onStepChange, onSkip }: {
+export function TourOverlay({ steps, active = true, onComplete, onStepChange, onSkip, label = 'setup' }: {
   steps: TourStep[];
   active?: boolean;
   onComplete?: () => void;
   onStepChange?: (step: TourStep | null) => void;
   onSkip?: () => void;
+  label?: string;
 }) {
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<Rect>(null);
@@ -89,7 +90,7 @@ export function TourOverlay({ steps, active = true, onComplete, onStepChange, on
         <div className="fixed rounded-xl ring-2 ring-ai pointer-events-none" style={{ top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }} />
       </> : <div className={`absolute inset-0 bg-black/70 ${step.passThrough ? 'pointer-events-none' : 'pointer-events-auto'}`} onClick={() => step.advanceOn === 'click-anywhere' && advance()} />}
       <div className="pointer-events-auto w-[min(330px,calc(100vw-32px)) rounded-xl border border-ai/70 bg-panel-card p-4 shadow-[0_0_35px_rgba(139,139,255,.38)]" style={cardStyle} onClick={(e) => e.stopPropagation()}>
-        <div className="font-mono text-[9px] uppercase tracking-[.16em] text-ai">setup · {index + 1}/{steps.length}</div>
+        <div className="font-mono text-[9px] uppercase tracking-[.16em] text-ai">{label} · {index + 1}/{steps.length}</div>
         <h2 className="mt-1 font-display text-base font-bold text-ink-50">{step.title}</h2>
         <p className="mt-2 font-mono text-[11px] leading-relaxed text-ink-300">{step.body}</p>
         <div className="mt-4 flex justify-end gap-2">

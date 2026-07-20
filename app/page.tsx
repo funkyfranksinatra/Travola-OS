@@ -350,7 +350,7 @@ function useMounted() {
   return mounted;
 }
 
-function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, onOpenService, hostMode = false }) {
+function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, onOpenService, hostMode = false, onReplayTips = null }) {
   const mounted = useMounted();
   const time = new Date(now).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   const date = new Date(now).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
@@ -391,6 +391,7 @@ function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, o
         <div className="flex items-center gap-2 px-3 py-1 bg-panel-card border border-border-hi rounded font-mono text-[10px] text-ink-50">
           {coversToday != null && (
             <button
+              data-tour="service-log"
               onClick={onOpenService}
               className="flex items-center gap-1.5 mr-3 pr-3 border-r border-border-hi hover:text-ink-50 transition-colors"
               title="Open the service log"
@@ -406,6 +407,7 @@ function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, o
         <div className="flex items-center gap-1.5 px-2.5 py-1 bg-state-availBg border border-state-avail rounded text-[9px] font-mono text-state-avail tracking-[0.1em] font-semibold">
           <span className="w-1.5 h-1.5 rounded-full bg-state-avail animate-pulse" />LIVE
         </div>
+        {hostMode && onReplayTips && <button onClick={onReplayTips} className="w-6 h-6 rounded-full border border-border-hi text-ink-300 font-mono text-xs hover:border-ai hover:text-ai" title="Replay tips" aria-label="Replay tips">?</button>}
       </div>
     </header>
   );
@@ -596,10 +598,11 @@ function Sidebar({ waitlist, reservations, selectedPartyId, setSelectedPartyId, 
   );
 
   return (
-    <aside className="w-[300px] bg-panel border-r border-border flex flex-col flex-shrink-0 relative">
+    <aside data-tour="staff-sidebar" className="w-[300px] bg-panel border-r border-border flex flex-col flex-shrink-0 relative">
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-5">
         {openWalkIn && (
           <button
+            data-tour="walk-in"
             onClick={openWalkIn}
             className={`w-full py-3 rounded-xl font-mono text-[11px] uppercase tracking-[0.12em] font-bold border transition-all flex items-center justify-center gap-2 ${walkInDisabled ? 'bg-panel-card text-ink-400 border-border-hi opacity-50 cursor-not-allowed' : 'bg-ai text-bg border-gray-500 hover:opacity-90 active:scale-[0.99] shadow-lg shadow-ai/20'}`}
           >
@@ -739,6 +742,7 @@ function Sidebar({ waitlist, reservations, selectedPartyId, setSelectedPartyId, 
           )}
 
           <button
+            data-tour="add-reservation"
             onClick={openModal}
             className={`w-full mt-3 px-3 py-2.5 rounded-lg border border-dashed text-[12px] font-medium transition-colors flex items-center justify-center gap-1.5 ${reservationsDisabled ? 'border-border-hi text-ink-500 opacity-50 cursor-not-allowed' : 'border-gray-600 text-gray-400 hover:bg-gray-800 hover:text-gray-200 hover:border-gray-500'}`}
             aria-label="Add reservation"
@@ -770,7 +774,7 @@ function Sidebar({ waitlist, reservations, selectedPartyId, setSelectedPartyId, 
         <section>
           {/* Top-level assignment controls — apply to ALL on-shift staff
               regardless of role, so they live above both sub-sections. */}
-          <div className="grid grid-cols-2 gap-2 mb-3">
+          <div data-tour="assignment-controls" className="grid grid-cols-2 gap-2 mb-3">
             <button
               onClick={() => {
                 if (isAssignMode) {
@@ -2112,6 +2116,7 @@ function FloorMap({
                   floorplan edit. */}
               {activeFloorId === f.id && (
                 <span
+                  data-tour="floor-menu"
                   onClick={(e) => {
                     e.stopPropagation();
                     const r = e.currentTarget.getBoundingClientRect();
@@ -2537,7 +2542,7 @@ function FloorMap({
               .sort((a, b) => parseResTime(a.time) - parseResTime(b.time));
 
             return (
-              <div key={t.id} data-table-tile data-table-id={String(t.id)} data-tour={editMode && visibleTables[0]?.id === t.id ? 'placed-table' : undefined}
+              <div key={t.id} data-table-tile data-table-id={String(t.id)} data-tour={editMode && visibleTables[0]?.id === t.id ? 'placed-table' : (!editMode && selectedTableId === t.id ? 'tour-seated-table' : undefined)}
                 ref={el => { tableRefs.current[t.id] = el; }}
                 onDragOver={(e) => {
                   // Only react to a party being dragged from the guest list —
@@ -2807,6 +2812,36 @@ function FloorMap({
         </div>
     </div>
   );
+}
+
+function featureTourSteps(surface, tab, historyImported) {
+  const common = {
+    calendar: [{ id: 'calendar', anchor: 'tab-calendar', title: 'Calendar', body: 'Open any day — past, present, or future — to inspect a shift, add future reservations, and plan sections.', advanceOn: 'click-anywhere' }],
+    predictor: [{ id: 'predictor', anchor: 'tab-predictor', title: 'Shift forecast', body: historyImported ? 'Use the forecast and weekly view to plan staffing and prep for expected volume.' : 'Use the forecast and weekly view to plan staffing and prep. With little history, accuracy improves as about a month of service data accumulates.', advanceOn: 'click-anywhere' }],
+    service: [{ id: 'service', anchor: 'tab-service', title: 'Service log', body: 'Shift stats live here. Open a party to correct anything recorded wrong.', advanceOn: 'click-anywhere' }],
+    timeline: [{ id: 'timeline', anchor: 'tab-timeline', title: 'Timeline', body: 'Read volume by time here. The heatmap shows when reservations arrive.', advanceOn: 'click-anywhere' }],
+    waitlist: [{ id: 'waitlist', anchor: 'tab-waitlist', title: 'Waitlist', body: 'Keep walk-ins moving here, then send a party to the floor when a table is ready.', advanceOn: 'click-anywhere' }],
+  };
+  if (tab !== 'floor') return common[tab] || [];
+  return surface === 'host'
+    ? [
+        { id: 'floor-menu', anchor: 'floor-menu', title: 'Floor options', body: 'Use this menu to keep a floor or table out of AI suggestions or online reservations.', advanceOn: 'click-anywhere' },
+        { id: 'staff', anchor: 'staff-sidebar', title: 'Shift roster', body: 'Toggle people on for this shift. AI-excluded staff stay out of Auto-Assign.', advanceOn: 'click-anywhere' },
+        { id: 'assign', anchor: 'assignment-controls', title: 'Sections', body: 'Assign mode and Sections let you inspect the floor; Auto-Assign balances eligible tables.', advanceOn: 'click-anywhere' },
+        { id: 'reservation', anchor: 'editor-floor', title: 'Seat with the co-pilot', body: 'A test reservation is ready. Tap a table; Merge & Seat combines tables for larger parties.', advanceOn: 'event:tour-reservation-seated', passThrough: true },
+        { id: 'seated-table', anchor: 'tour-seated-table', title: 'Table details', body: 'Select the table for party tools. This test party is removed when the tour ends.', advanceOn: 'next' },
+        { id: 'walkin', anchor: 'editor-floor', title: 'Walk-ins', body: 'A test walk-in is ready. Seat it with the same co-pilot flow.', advanceOn: 'event:tour-walkin-seated', passThrough: true },
+        { id: 'log', anchor: 'service-log', title: 'Correct the record', body: 'Open Service log to review seated and historical parties and fix mistakes.', advanceOn: 'click-anywhere' },
+      ]
+    : [
+        { id: 'floor-menu', anchor: 'floor-menu', title: 'Floor options', body: 'Use ⋮ to exclude a floor or table from AI suggestions, or block it from online reservations.', advanceOn: 'click-anywhere' },
+        { id: 'staff', anchor: 'staff-sidebar', title: 'Shift roster', body: 'Toggle staff on for the shift. AI-excluded people stay out of Auto-Assign.', advanceOn: 'click-anywhere' },
+        { id: 'assign', anchor: 'assignment-controls', title: 'Sections', body: 'Manual Assign sets sections one table at a time. Sections shows them all; Auto-Assign balances the available floor.', advanceOn: 'click-anywhere' },
+        { id: 'reservation', anchor: 'editor-floor', title: 'Seat a reservation', body: 'A test reservation is ready. Tap a table: the seater minimizes double-seating and balances loads. Merge & Seat combines two tables for one party.', advanceOn: 'event:tour-reservation-seated', passThrough: true },
+        { id: 'seated-table', anchor: 'tour-seated-table', title: 'Table details', body: 'Select the table for its menu and party panel. This test party is removed when the tour ends.', advanceOn: 'next' },
+        { id: 'walkin', anchor: 'editor-floor', title: 'Walk-ins', body: 'A test walk-in is ready. Seat it with the same co-pilot flow; Merge & Seat still applies.', advanceOn: 'event:tour-walkin-seated', passThrough: true },
+        { id: 'log', anchor: 'service-log', title: 'Service log', body: 'Open any seated or past party here to correct a mistake.', advanceOn: 'click-anywhere' },
+      ];
 }
 
 function PredictorView({ forecast = null, loading = false, error = null, onRefresh, date, setDate }) {
@@ -4979,7 +5014,7 @@ function ImportOverlay({ tables, onClose, onDone, defaultTurnMinutes = 90, showA
   );
 }
 
-function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], servers = [], roles = [], addServer, removeServer, setServerColor, setServerRoles, addRole, removeRole, restaurantHours = { open: null, close: null }, setRestaurantHours, prefs = {}, setPref, onResetLiveFloor, onOpenImport, onOpenMigrate }) {
+function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], servers = [], roles = [], addServer, removeServer, setServerColor, setServerRoles, addRole, removeRole, restaurantHours = { open: null, close: null }, setRestaurantHours, prefs = {}, setPref, onResetLiveFloor, onOpenImport, onOpenMigrate, onReplayTips = null }) {
   // Every knob reads from Home's persisted prefs (previously these were
   // component-local useState — they reset on every tab switch, let alone
   // reloads). The set* shims keep all existing JSX below untouched.
@@ -5044,7 +5079,7 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-3xl mx-auto px-8 py-8 flex flex-col gap-6">
         <div className="flex flex-col gap-1">
-          <h1 className="font-display text-xl font-bold text-ink-50">Settings</h1>
+          <div className="flex items-center justify-between gap-4"><h1 className="font-display text-xl font-bold text-ink-50">Settings</h1>{onReplayTips && <button onClick={onReplayTips} className="font-mono text-[10px] uppercase tracking-[.1em] text-ai hover:text-ink-50">Replay tips</button>}</div>
           <p className="font-mono text-[11px] text-ink-400 tracking-[0.04em]">Service defaults and floor configuration for this location.</p>
         </div>
 
@@ -8047,6 +8082,107 @@ export default function Home({ hostMode = false } = {}) {
   const viewingPast = viewDateStr < todayStr;
   const viewingFuture = viewDateStr > todayStr;
 
+  // ─── First-visit feature tips ──────────────────────────────────────
+  // This deliberately sits after `now`: tour setup derives its demo
+  // reservation date from the same clock as the floor, avoiding a TDZ
+  // during the component's first render.
+  const [featureTour, setFeatureTour] = useState(null);
+  const [featureTourStep, setFeatureTourStep] = useState(null);
+  const tourSurface = hostMode ? 'host' : 'manager';
+  const historyImported = reservations.some(r => ['opentable', 'resy', 'paper'].includes(String(r.source || '').toLowerCase()));
+  const abandonedTourSweepRef = useRef(false);
+
+  const clearTourState = useCallback((surface) => {
+    setPrefs(p => {
+      const next = { ...(p.tourState || {}) };
+      delete next[surface];
+      return { ...p, tourState: next };
+    });
+  }, []);
+
+  const completeFeatureTour = useCallback((tour = featureTour) => {
+    const ids = Object.values(prefs.tourState?.[tourSurface]?.partyIds || {}).filter(Boolean);
+    if (ids.length) {
+      const idSet = new Set(ids);
+      // Demo parties exist only in this client session. Removing them here
+      // and clearing the persisted IDs means they never reach service
+      // history or forecast data.
+      setReservations(prev => prev.filter(p => !idSet.has(p.id)));
+      setWaitlist(prev => prev.filter(p => !idSet.has(p.id)));
+      setSelectedPartyId(prev => idSet.has(prev) ? null : prev);
+    }
+    clearTourState(tourSurface);
+    if (tour) setPrefs(p => ({ ...p, tours: { ...(p.tours || {}), [tour.surface]: { ...((p.tours || {})[tour.surface] || {}), [tour.tab]: true } } }));
+    setFeatureTourStep(null);
+    setFeatureTour(null);
+  }, [clearTourState, featureTour, prefs.tourState, tourSurface]);
+
+  const replayFeatureTour = useCallback(() => {
+    const tab = !hostMode && activeTab === 'settings' ? 'floor' : activeTab;
+    if (!featureTourSteps(tourSurface, tab, historyImported).length) return;
+    if (tab !== activeTab) {
+      // Settings replays the manager sequence from Floor. The remaining
+      // tab tips naturally reappear as the user visits each tab.
+      setPrefs(p => ({ ...p, tours: { ...(p.tours || {}), manager: {} } }));
+      setActiveTab(tab);
+      window.setTimeout(() => setFeatureTour({ surface: tourSurface, tab, replay: true }), 0);
+    } else setFeatureTour({ surface: tourSurface, tab, replay: true });
+  }, [activeTab, historyImported, hostMode, tourSurface]);
+
+  // A crash or closed tab can leave only the IDs in settings. Sweep that
+  // marker before a new tour can render; the demo records are client-only,
+  // so there is no reservation, waitlist, service-log, or floor residue.
+  useEffect(() => {
+    if (!hydrated || abandonedTourSweepRef.current) return;
+    abandonedTourSweepRef.current = true;
+    const ids = Object.values(prefs.tourState?.[tourSurface]?.partyIds || {}).filter(Boolean);
+    if (!ids.length) return;
+    const idSet = new Set(ids);
+    setReservations(prev => prev.filter(p => !idSet.has(p.id)));
+    setWaitlist(prev => prev.filter(p => !idSet.has(p.id)));
+    setSelectedPartyId(prev => idSet.has(prev) ? null : prev);
+    clearTourState(tourSurface);
+  }, [clearTourState, hydrated, prefs.tourState, tourSurface]);
+
+  useEffect(() => {
+    if (!hydrated || featureTour || (!hostMode && onboarding && !onboarding.done)) return;
+    const done = !!(prefs.tours && prefs.tours[tourSurface] && prefs.tours[tourSurface][activeTab]);
+    if (!done && featureTourSteps(tourSurface, activeTab, historyImported).length) setFeatureTour({ surface: tourSurface, tab: activeTab });
+  }, [activeTab, featureTour, historyImported, hostMode, hydrated, onboarding, prefs.tours, tourSurface]);
+
+  useEffect(() => {
+    if (featureTour?.tab !== 'floor' || !featureTourStep) return;
+    const parties = prefs.tourState?.[tourSurface]?.partyIds || {};
+    const addDemo = (kind) => {
+      if (parties[kind]) return;
+      const id = mintId(`tour-${kind}`);
+      const party = kind === 'reservation'
+        ? { id, name: 'Tour Demo Party', size: 2, date: todayStr, time: new Date(now).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }), status: 'confirmed', tag: 'Tour', tourDemo: true }
+        : { id, name: 'Tour Demo Party', size: 2, addedAt: now, tag: 'Tour', tourDemo: true };
+      if (kind === 'reservation') setReservations(prev => [...prev, party]);
+      else setWaitlist(prev => [...prev, party]);
+      setPrefs(p => ({ ...p, tourState: { ...(p.tourState || {}), [tourSurface]: { partyIds: { ...((p.tourState || {})[tourSurface]?.partyIds || {}), [kind]: id } } } }));
+    };
+    if (featureTourStep === 'reservation') addDemo('reservation');
+    if (featureTourStep === 'walkin') addDemo('walkin');
+  }, [featureTour, featureTourStep, now, prefs.tourState, todayStr, tourSurface]);
+
+  // The floor handler remains untouched: tour clicks merely select a
+  // table, then notify the overlay. That keeps test parties out of every
+  // persistence pipeline while preserving the real table interaction.
+  useEffect(() => {
+    if (featureTour?.tab !== 'floor' || !['reservation', 'walkin'].includes(featureTourStep || '')) return;
+    const partyId = prefs.tourState?.[tourSurface]?.partyIds?.[featureTourStep];
+    if (!partyId) return;
+    const eventName = `tour-${featureTourStep}-seated`;
+    const onTableClick = (event) => {
+      const node = event.target instanceof Element ? event.target.closest('[data-table-tile]') : null;
+      if (node) notifyTour(eventName);
+    };
+    document.addEventListener('click', onTableClick, true);
+    return () => document.removeEventListener('click', onTableClick, true);
+  }, [featureTour, featureTourStep, prefs.tourState, tourSurface]);
+
 
 
   // ─── AI Predictor state ───────────────────────────────────────────
@@ -9697,7 +9833,16 @@ export default function Home({ hostMode = false } = {}) {
           <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-400">Loading floor…</div>
         </div>
       )}
-      <Header now={now} activeTab={activeTab} setActiveTab={setActiveTab} occupancy={occupancy} coversToday={serviceLog ? serviceLog.covers.total : null} onOpenService={() => setActiveTab('service')} hostMode={hostMode} />
+      <Header now={now} activeTab={activeTab} setActiveTab={setActiveTab} occupancy={occupancy} coversToday={serviceLog ? serviceLog.covers.total : null} onOpenService={() => setActiveTab('service')} hostMode={hostMode} onReplayTips={hostMode ? replayFeatureTour : null} />
+      {hydrated && featureTour && (
+        <TourOverlay
+          steps={featureTourSteps(featureTour.surface, featureTour.tab, historyImported)}
+          label="tips"
+          onStepChange={(step) => setFeatureTourStep(step?.id || null)}
+          onComplete={() => completeFeatureTour()}
+          onSkip={() => completeFeatureTour()}
+        />
+      )}
       {!hostMode && hydrated && onboarding && !onboarding.done && (
         <OnboardingFlow
           stage={onboarding.stage || 'path'}
@@ -9804,7 +9949,7 @@ export default function Home({ hostMode = false } = {}) {
           {activeTab === "timeline" && <TimelineView reservations={todaysReservations} restaurantHours={restaurantHours} onSelectReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} />}
           {activeTab === "waitlist" && <WaitlistView waitlist={waitlist} reservations={todaysReservations} now={now} onSeatParty={seatFromWaitlist} onOpenReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} onDeleteParty={(id) => requestDelete('waitlist', id)} />}
           {activeTab === "predictor" && <PredictorView forecast={predictorData} loading={predictorLoading} error={predictorError} onRefresh={fetchPredictions} date={predictorDate} setDate={setPredictorDate} />}
-          {activeTab === "settings" && <SettingsView setEditMode={setEditMode} setActiveTab={setActiveTab} floors={floors} tables={tables} servers={servers} roles={roles} addServer={addServer} removeServer={removeServer} setServerColor={setServerColor} setServerRoles={setServerRoles} addRole={addRole} removeRole={removeRole} restaurantHours={restaurantHours} setRestaurantHours={setRestaurantHours} prefs={prefs} setPref={setPref} onResetLiveFloor={resetLiveFloor} onOpenImport={() => setImportOpen(true)} onOpenMigrate={() => setMigrateOpen(true)} />}
+          {activeTab === "settings" && <SettingsView setEditMode={setEditMode} setActiveTab={setActiveTab} floors={floors} tables={tables} servers={servers} roles={roles} addServer={addServer} removeServer={removeServer} setServerColor={setServerColor} setServerRoles={setServerRoles} addRole={addRole} removeRole={removeRole} restaurantHours={restaurantHours} setRestaurantHours={setRestaurantHours} prefs={prefs} setPref={setPref} onResetLiveFloor={resetLiveFloor} onOpenImport={() => setImportOpen(true)} onOpenMigrate={() => setMigrateOpen(true)} onReplayTips={replayFeatureTour} />}
           {activeTab === "calendar" && (
             <CalendarView
               calendarMonth={calendarMonth}
