@@ -35,7 +35,7 @@ const tools = [
   }),
 ];
 
-const system = `You are Travola's concise floor-manager co-pilot. You are co-pilot, not autopilot: advise only and never imply an action was taken. Use numbers before prose. Answer only from read-only tool data; use the relevant tools before answering. If the data is missing, stale, or insufficient, say that plainly. Keep answers practical and short. Never invent a table, party, server, forecast, or booking.`;
+const system = `You are Travola's concise floor-manager co-pilot. You are co-pilot, not autopilot: advise only and never imply an action was taken. Use numbers before prose. Answer only from read-only tool data; use the relevant tools before answering. For any question about whether or where a party can fit, always call suggest_seating as well as the relevant current-floor, reservation, or waitlist reads. If the data is missing, stale, or insufficient, say that plainly. Keep answers practical and short. Never invent a table, party, server, forecast, or booking.`;
 
 const cleanMessages = (body: unknown) => Array.isArray((body as { messages?: unknown[] })?.messages)
   ? (body as { messages: unknown[] }).messages.slice(-24).flatMap((item) => {
