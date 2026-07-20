@@ -1,0 +1,25 @@
+- generic [ref=f2e1]:
+  - main [ref=f2e2]:
+    - generic [ref=f2e3]:
+      - generic [ref=f2e4]:
+        - img "Travola" [ref=f2e5]
+        - generic [ref=f2e6]:
+          - heading "TRAVOLA" [level=1] [ref=f2e7]
+          - paragraph [ref=f2e8]: NEW RESTAURANT
+      - generic [ref=f2e9]:
+        - generic [ref=f2e10]:
+          - text: RESTAURANT NAME
+          - textbox "RESTAURANT NAME" [ref=f2e11]
+        - generic [ref=f2e12]:
+          - text: 4-DIGIT PASSCODE
+          - textbox "4-DIGIT PASSCODE" [ref=f2e13]
+        - generic [ref=f2e26]:
+          - text: CONFIRM PASSCODE
+          - textbox "CONFIRM PASSCODE" [ref=f2e27]
+        - generic [ref=f2e28]:
+          - text: RECOVERY EMAIL (OPTIONAL)
+          - textbox "RECOVERY EMAIL (OPTIONAL)" [ref=f2e29]
+        - button "CREATE & ENTER" [ref=f2e30]
+      - button "← BACK TO SIGN IN" [active] [ref=f2e31]
+  - button "Open Next.js Dev Tools" [ref=f2e21] [cursor=pointer]
+  - alert [ref=f2e25]

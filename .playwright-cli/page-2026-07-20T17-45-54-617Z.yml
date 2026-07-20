@@ -1,0 +1,61 @@
+- generic [ref=f3e2]:
+  - generic [ref=f3e3]: Loading floor…
+  - banner [ref=f3e5]:
+    - generic [ref=f3e6]: Travolav1.2
+    - navigation [ref=f3e9]:
+      - button "floor" [ref=f3e10]
+      - button "timeline" [ref=f3e11]
+      - button "waitlist" [ref=f3e12]
+      - button "service" [ref=f3e13]
+      - button "predictor" [ref=f3e14]
+      - button "calendar" [ref=f3e15]
+      - button "settings" [ref=f3e16]
+    - generic [ref=f3e17]:
+      - generic [ref=f3e18]: —:—·
+      - generic [ref=f3e19]:
+        - text: Floor
+        - generic [ref=f3e20]: 0/0
+        - generic [ref=f3e21]: 0%
+      - generic [ref=f3e22]: LIVE
+  - generic [ref=f3e23]:
+    - complementary [ref=f3e24]:
+      - generic [ref=f3e25]:
+        - button "⚡Walk-In · Quick Seat" [ref=f3e26]
+        - generic [ref=f3e27]:
+          - generic [ref=f3e28]:
+            - heading "Guest List" [level=3] [ref=f3e29]
+            - generic [ref=f3e30]:
+              - generic [ref=f3e31]: 0 here
+              - text: ·
+              - generic [ref=f3e32]: 0 booked
+              - text: ·
+              - generic [ref=f3e33]: 0 guests
+          - generic [ref=f3e34]: No guests in queue
+          - button "Add reservation" [ref=f3e35]: +Add Reservation
+        - generic [ref=f3e36]:
+          - generic [ref=f3e37]:
+            - button "Manual Assign" [disabled] [ref=f3e38]
+            - button "⚡ Auto-Assign" [disabled] [ref=f3e39]
+            - button "Sections" [disabled] [ref=f3e40]
+          - generic [ref=f3e41]:
+            - heading "Bartenders" [level=3] [ref=f3e42]
+            - generic [ref=f3e43]:
+              - text: "0"
+              - generic [ref=f3e44]: / 0
+          - generic [ref=f3e45]: No bartenders added
+          - generic [ref=f3e46]:
+            - heading "Waiters" [level=3] [ref=f3e47]
+            - generic [ref=f3e48]:
+              - text: "0"
+              - generic [ref=f3e49]: / 0
+          - generic [ref=f3e50]: No waiters added
+    - main [ref=f3e51]:
+      - generic [ref=f3e54]:
+        - button [ref=f3e56]:
+          - text: Main Floor
+          - button "Floor options" [ref=f3e57]: ⋮
+        - generic [ref=f3e58]:
+          - button "Zoom out" [ref=f3e59]: −
+          - text: 100%
+          - button "Zoom in" [ref=f3e60]: +
+          - button "Fit all tables" [ref=f3e61]: Fit

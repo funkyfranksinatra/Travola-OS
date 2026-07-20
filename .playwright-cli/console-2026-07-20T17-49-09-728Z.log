@@ -1,0 +1,2 @@
+[   45591ms] [ERROR] Failed to load resource: the server responded with a status of 400 () @ https://travola-os-tablai.vercel.app/api/floor:0
+[   45592ms] [WARNING] [persist] PUT /api/floor → HTTP 400 @ https://travola-os-tablai.vercel.app/_next/static/chunks/057-6qx785wm_.js?dpl=dpl_FYpzDdNHJa5k9AkVdusjo7d8yeyK:0

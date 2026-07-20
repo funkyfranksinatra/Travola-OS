@@ -1,0 +1,96 @@
+- generic [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - banner [ref=f1e6]:
+      - generic [ref=f1e9]:
+        - generic [ref=f1e10]: Travola
+        - generic [ref=f1e11]: v1.2
+      - navigation [ref=f1e12]:
+        - button "floor" [ref=f1e13]
+        - button "timeline" [ref=f1e14]
+        - button "waitlist" [ref=f1e15]
+        - button "service" [ref=f1e16]
+        - button "predictor" [ref=f1e17]
+        - button "calendar" [ref=f1e18]
+        - button "settings" [ref=f1e19]
+      - generic [ref=f1e20]:
+        - generic [ref=f1e21]: 11:51 AM·Monday, Jul 20
+        - generic [ref=f1e22]:
+          - button "Covers 0" [ref=f1e76]:
+            - generic [ref=f1e77]: Covers
+            - generic [ref=f1e78]: "0"
+          - generic [ref=f1e23]: Floor
+          - generic [ref=f1e24]: 0/1
+          - generic [ref=f1e25]: 0%
+        - generic [ref=f1e26]: LIVE
+    - generic [ref=f1e449]:
+      - generic [ref=f1e450]: setup · 1/1
+      - heading "Add a member" [level=2] [ref=f1e451]
+      - paragraph [ref=f1e452]: Add your first team member. You can fill in roles and colors later.
+      - generic [ref=f1e453]:
+        - button "Skip setup" [ref=f1e454]
+        - button "Next" [ref=f1e455]
+    - generic [ref=f1e28]:
+      - complementary [ref=f1e227]:
+        - generic [ref=f1e228]:
+          - button "⚡ Walk-In · Quick Seat" [ref=f1e229]:
+            - generic [ref=f1e230]: ⚡
+            - generic [ref=f1e231]: Walk-In · Quick Seat
+          - generic [ref=f1e232]:
+            - generic [ref=f1e233]:
+              - heading "Guest List" [level=3] [ref=f1e234]
+              - generic [ref=f1e235]:
+                - generic [ref=f1e236]: 0 here
+                - text: ·
+                - generic [ref=f1e237]: 0 booked
+                - text: ·
+                - generic [ref=f1e238]: 0 guests
+            - generic [ref=f1e239]: No guests in queue
+            - button "Add reservation" [ref=f1e240]:
+              - generic [ref=f1e241]: +
+              - generic [ref=f1e242]: Add Reservation
+          - generic [ref=f1e244]:
+            - generic [ref=f1e245]:
+              - button "Manual Assign" [disabled] [ref=f1e246]
+              - button "⚡ Auto-Assign" [disabled] [ref=f1e247]
+              - button "Sections" [disabled] [ref=f1e248]
+            - generic [ref=f1e249]:
+              - heading "Bartenders" [level=3] [ref=f1e250]
+              - generic [ref=f1e251]:
+                - text: "0"
+                - generic [ref=f1e252]: / 0
+            - generic [ref=f1e253]: No bartenders added
+            - generic [ref=f1e254]:
+              - heading "Waiters" [level=3] [ref=f1e255]
+              - generic [ref=f1e256]:
+                - text: "0"
+                - generic [ref=f1e257]: / 0
+            - generic [ref=f1e258]: No waiters added
+      - main [ref=f1e61]:
+        - generic [ref=f1e457]:
+          - generic [ref=f1e458]:
+            - button "←" [ref=f1e459]
+            - generic [ref=f1e460]:
+              - heading "Team Management" [level=1] [ref=f1e461]
+              - paragraph [ref=f1e462]: 0 members · 2 roles
+          - generic [ref=f1e467]:
+            - generic [ref=f1e468]:
+              - generic [ref=f1e469]: Name
+              - textbox "Enter name" [active] [ref=f1e470]
+            - generic [ref=f1e471]:
+              - generic [ref=f1e472]: Select role(s) — optional
+              - generic [ref=f1e473]:
+                - generic [ref=f1e474]:
+                  - button "waiter" [ref=f1e475]
+                  - button "bartender" [ref=f1e476]
+                - generic [ref=f1e477]:
+                  - textbox "Add role" [ref=f1e478]
+                  - button "Add" [disabled] [ref=f1e479]
+                  - button "Remove" [ref=f1e480]
+            - generic [ref=f1e481]:
+              - generic [ref=f1e482]: Section color — optional
+              - generic [ref=f1e483]: "#4f8cff"
+            - generic [ref=f1e490]:
+              - button "Confirm" [disabled] [ref=f1e491]
+              - button "Cancel" [ref=f1e492]
+          - generic [ref=f1e465]: No team members yet.
+  - alert [ref=f1e103]

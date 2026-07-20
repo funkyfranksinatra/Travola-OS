@@ -1,0 +1,17 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - img "Travola" [ref=e5]
+        - generic [ref=e6]:
+          - heading "TRAVOLA" [level=1] [ref=e7]
+          - paragraph [ref=e8]: HOST STAND
+      - generic [ref=e9]:
+        - generic [ref=e10]:
+          - text: RESTAURANT NAME
+          - textbox "RESTAURANT NAME" [ref=e11]
+        - generic [ref=e12]:
+          - text: 4-DIGIT PASSCODE
+          - textbox "4-DIGIT PASSCODE" [ref=e13]
+        - button "ENTER TRAVOLA" [ref=e14]
+  - button "Open Next.js Dev Tools" [ref=e20] [cursor=pointer]

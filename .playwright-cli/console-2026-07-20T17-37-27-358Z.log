@@ -1,0 +1,25 @@
+[     180ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[     267ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[     394ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[     550ms] [LOG] [Fast Refresh] done in 257ms @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[   21038ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[   21171ms] [LOG] [Fast Refresh] done in 235ms @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[   22708ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[   22729ms] [LOG] [Fast Refresh] done in 134ms @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[   22870ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[   22904ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[   23042ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[   23055ms] [LOG] [Fast Refresh] done in 115ms @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[   34022ms] [ERROR] Failed to load resource: the server responded with a status of 400 (Bad Request) @ http://localhost:3000/api/floor:0
+[   34022ms] [WARNING] [persist] PUT /api/floor → HTTP 400 @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[  139922ms] [WARNING] [tour] missing data-tour anchors: add-floor @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[  304697ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[  305237ms] [LOG] [Fast Refresh] done in 600ms @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[  305365ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[  305367ms] [LOG] [Fast Refresh] done in 103ms @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[  485605ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[  485672ms] [LOG] [Fast Refresh] done in 181ms @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[  485810ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[  485844ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[  507271ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477
+[  507299ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/123w_next_dist_0._4zt6._.js:2477

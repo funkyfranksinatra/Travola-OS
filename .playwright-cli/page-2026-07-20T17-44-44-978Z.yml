@@ -1,0 +1,251 @@
+- generic [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - banner [ref=f1e6]:
+      - generic [ref=f1e9]:
+        - generic [ref=f1e10]: Travola
+        - generic [ref=f1e11]: v1.2
+      - navigation [ref=f1e12]:
+        - button "floor" [ref=f1e13]
+        - button "timeline" [ref=f1e14]
+        - button "waitlist" [ref=f1e15]
+        - button "service" [ref=f1e16]
+        - button "predictor" [ref=f1e17]
+        - button "calendar" [ref=f1e18]
+        - button "settings" [ref=f1e19]
+      - generic [ref=f1e20]:
+        - generic [ref=f1e21]: 11:43 AM·Monday, Jul 20
+        - generic [ref=f1e22]:
+          - button "Covers 0" [ref=f1e76]:
+            - generic [ref=f1e77]: Covers
+            - generic [ref=f1e78]: "0"
+          - generic [ref=f1e23]: Floor
+          - generic [ref=f1e24]: 0/1
+          - generic [ref=f1e25]: 0%
+        - generic [ref=f1e26]: LIVE
+    - generic [ref=f1e722]:
+      - generic [ref=f1e723]: new restaurant setup
+      - heading "Baseline setup" [level=1] [ref=f1e731]
+      - paragraph [ref=f1e725]: Average table turn time (minutes)?
+      - generic [ref=f1e726]:
+        - spinbutton [ref=f1e761]
+        - generic [ref=f1e733]:
+          - button "Skip question" [ref=f1e734]
+          - button "Next · 8/8" [active] [ref=f1e762]
+      - button "Skip setup" [ref=f1e730]
+    - generic [ref=f1e28]:
+      - complementary [ref=f1e247]:
+        - generic [ref=f1e248]:
+          - button "⚡ Walk-In · Quick Seat" [ref=f1e249]:
+            - generic [ref=f1e250]: ⚡
+            - generic [ref=f1e251]: Walk-In · Quick Seat
+          - generic [ref=f1e252]:
+            - generic [ref=f1e253]:
+              - heading "Guest List" [level=3] [ref=f1e254]
+              - generic [ref=f1e255]:
+                - generic [ref=f1e256]: 0 here
+                - text: ·
+                - generic [ref=f1e257]: 0 booked
+                - text: ·
+                - generic [ref=f1e258]: 0 guests
+            - generic [ref=f1e259]: No guests in queue
+            - button "Add reservation" [ref=f1e260]:
+              - generic [ref=f1e261]: +
+              - generic [ref=f1e262]: Add Reservation
+          - generic [ref=f1e264]:
+            - generic [ref=f1e265]:
+              - button "Manual Assign" [disabled] [ref=f1e266]
+              - button "⚡ Auto-Assign" [disabled] [ref=f1e267]
+              - button "Sections" [disabled] [ref=f1e268]
+            - generic [ref=f1e269]:
+              - heading "Bartenders" [level=3] [ref=f1e270]
+              - generic [ref=f1e271]:
+                - text: "0"
+                - generic [ref=f1e272]: / 0
+            - generic [ref=f1e273]: No bartenders added
+            - generic [ref=f1e274]:
+              - heading "Waiters" [level=3] [ref=f1e275]
+              - generic [ref=f1e276]:
+                - text: "0"
+                - generic [ref=f1e277]: / 1
+            - generic [ref=f1e520] [cursor=pointer]:
+              - generic [ref=f1e521]:
+                - generic [ref=f1e522]: Alex
+                - button "Toggle AI exclusion" [ref=f1e523]: AI
+              - switch [ref=f1e524]
+      - main [ref=f1e61]:
+        - generic [ref=f1e543]:
+          - generic [ref=f1e544]:
+            - generic [ref=f1e545]:
+              - heading "Settings" [level=1] [ref=f1e546]
+              - button "Replay tips" [ref=f1e547]
+            - paragraph [ref=f1e548]: Service defaults and floor configuration for this location.
+          - generic [ref=f1e549]:
+            - heading "Account" [level=2] [ref=f1e551]
+            - generic [ref=f1e552]:
+              - generic [ref=f1e553]:
+                - generic [ref=f1e554]: UX Housekeeping Local 1726
+                - generic [ref=f1e555]: Sign in as a different restaurant, or create a new one.
+              - button "Sign out" [ref=f1e556]
+          - generic [ref=f1e557]:
+            - heading "Team" [level=2] [ref=f1e559]
+            - generic [ref=f1e560]:
+              - generic [ref=f1e561]:
+                - generic [ref=f1e562]: Team & roles
+                - generic [ref=f1e563]: 1 member · add or remove staff, set colors, and manage roles.
+              - button "Team Management" [ref=f1e564]
+          - generic [ref=f1e565]:
+            - heading "General" [level=2] [ref=f1e567]
+            - generic [ref=f1e568]:
+              - generic [ref=f1e569]:
+                - generic [ref=f1e570]:
+                  - generic [ref=f1e571]: 24-hour clock
+                  - generic [ref=f1e572]: Display service times in 24-hour format.
+                - switch [ref=f1e573]
+              - generic [ref=f1e575]:
+                - generic [ref=f1e576]:
+                  - generic [ref=f1e577]: Sound alerts
+                  - generic [ref=f1e578]: Audible cue when a party checks in or a timer elapses.
+                - switch [ref=f1e579]
+          - generic [ref=f1e581]:
+            - heading "Location & Predictor Signals" [level=2] [ref=f1e583]
+            - generic [ref=f1e584]:
+              - paragraph [ref=f1e585]: The predictor uses this to pull the local weather forecast and to run live web research — nearby events, road/construction access, competitor activity, promotions, review trajectory, social buzz, and tourism/economic conditions — for the shift you're forecasting. Coordinates drive the weather; the name lets the web search pin your venue.
+              - generic [ref=f1e586]:
+                - generic [ref=f1e587]:
+                  - generic [ref=f1e588]: Restaurant name
+                  - textbox "Restaurant name" [ref=f1e589]:
+                    - /placeholder: e.g. Volario's
+                    - text: UX Housekeeping Local 1726
+                - generic [ref=f1e590]:
+                  - generic [ref=f1e591]: Street address (optional)
+                  - textbox "Street address (optional)" [ref=f1e592]:
+                    - /placeholder: used for research if set
+                - generic [ref=f1e593]:
+                  - generic [ref=f1e594]: Latitude
+                  - textbox "Latitude" [ref=f1e595]:
+                    - /placeholder: "39.9197758"
+                    - text: "39.7392"
+                - generic [ref=f1e596]:
+                  - generic [ref=f1e597]: Longitude
+                  - textbox "Longitude" [ref=f1e598]:
+                    - /placeholder: "-105.7904009"
+                    - text: "-104.9903"
+              - paragraph [ref=f1e599]: Find coordinates by right-clicking your restaurant in Google Maps → the lat, lon pair at the top. Changes save automatically and apply the next time you refresh a forecast.
+              - button "Confirm location" [ref=f1e601]
+          - generic [ref=f1e602]:
+            - heading "Floor & Service" [level=2] [ref=f1e604]
+            - generic [ref=f1e605]:
+              - generic [ref=f1e606]:
+                - generic [ref=f1e607]:
+                  - generic [ref=f1e608]: Floor plan
+                  - generic [ref=f1e609]: 1 tables across 2 floors. Add, move, rotate, resize, and renumber tables.
+                - button "Edit Layout" [ref=f1e610]
+              - generic [ref=f1e611]:
+                - generic [ref=f1e612]:
+                  - generic [ref=f1e613]: Reset live floor
+                  - generic [ref=f1e614]: Clears every table's occupied/bussing/merge state and moves any lingering seated parties to history. Layout is untouched. Use if a table is stuck or a party won't clear.
+                - button "Reset floor" [ref=f1e615]
+              - generic [ref=f1e616]:
+                - generic [ref=f1e617]:
+                  - generic [ref=f1e618]: Import history
+                  - generic [ref=f1e619]: Bring reservations, walk-ins and turn times over from a previous system's export (CSV/PDF) or a photographed paper book. Everything is reviewed before it's saved, and it feeds the predictor's training data.
+                - button "Import data" [ref=f1e620]
+              - generic [ref=f1e621]:
+                - generic [ref=f1e622]:
+                  - generic [ref=f1e623]: Migrate floor plan
+                  - generic [ref=f1e624]: Photograph or screenshot your previous system's floor plan and get a matching Travola floor — table numbers, shapes, seat counts and placement identified automatically, opened in Edit Layout for adjustments. Re-importing a floor with the same name replaces it; Cancel Migration restores the previous plan.
+                - button "Migrate plan" [ref=f1e625]
+              - generic [ref=f1e626]:
+                - generic [ref=f1e627]:
+                  - generic [ref=f1e628]:
+                    - generic [ref=f1e629]: Auto-assign waiters
+                    - generic [ref=f1e630]: Suggest a waiter section when a table is seated.
+                  - switch [checked] [ref=f1e631]
+                - generic [ref=f1e633]:
+                  - generic [ref=f1e634]:
+                    - generic [ref=f1e635]: Confirm before seating
+                    - generic [ref=f1e636]: Require a confirmation tap before marking a table seated.
+                  - switch [ref=f1e637]
+                - generic [ref=f1e639]:
+                  - generic [ref=f1e640]:
+                    - generic [ref=f1e641]: Default turn time
+                    - generic [ref=f1e642]: Estimated dining duration used for pacing.
+                  - combobox [ref=f1e643] [cursor=pointer]:
+                    - option "60 min"
+                    - option "90 min" [selected]
+                    - option "120 min"
+                    - option "150 min"
+          - generic [ref=f1e644]:
+            - heading "Hours" [level=2] [ref=f1e646]
+            - generic [ref=f1e647]:
+              - generic [ref=f1e648]:
+                - generic [ref=f1e649]:
+                  - generic [ref=f1e650]: Opening time
+                  - generic [ref=f1e651]: When the timeline axis starts.
+                - combobox "8:15 AM" [ref=f1e653]
+              - generic [ref=f1e654]:
+                - generic [ref=f1e655]:
+                  - generic [ref=f1e656]: Closing time
+                  - generic [ref=f1e657]: When the timeline axis ends.
+                - combobox "8:15 AM" [ref=f1e659]
+              - generic [ref=f1e660]: Type an exact time (e.g. 8:15 AM) or choose a common one. Overnight hours are supported — set close earlier than open (e.g. open 10 AM, close 1 AM) and the service day runs past midnight.
+              - generic [ref=f1e661]:
+                - generic [ref=f1e662]:
+                  - generic [ref=f1e663]: Days open
+                  - generic [ref=f1e664]: Closed dates return a zero-cover forecast.
+                - generic [ref=f1e665]:
+                  - button "S" [ref=f1e666]
+                  - button "M" [ref=f1e667]
+                  - button "T" [ref=f1e668]
+                  - button "W" [ref=f1e669]
+                  - button "T" [ref=f1e670]
+                  - button "F" [ref=f1e671]
+                  - button "S" [ref=f1e672]
+          - generic [ref=f1e673]:
+            - heading "Reservations" [level=2] [ref=f1e675]
+            - generic [ref=f1e676]:
+              - generic [ref=f1e677]:
+                - generic [ref=f1e678]:
+                  - generic [ref=f1e679]: Booking buffer
+                  - generic [ref=f1e680]: Spacing held between consecutive reservations on a table.
+                - combobox [ref=f1e681] [cursor=pointer]:
+                  - option "None"
+                  - option "15 min" [selected]
+                  - option "30 min"
+              - generic [ref=f1e682]:
+                - generic [ref=f1e683]:
+                  - generic [ref=f1e684]: Large party threshold
+                  - generic [ref=f1e685]: Parties at or above this size flag for manager review.
+                - combobox [ref=f1e686] [cursor=pointer]:
+                  - option "5+"
+                  - option "6+" [selected]
+                  - option "8+"
+                  - option "10+"
+              - generic [ref=f1e687]:
+                - generic [ref=f1e688]:
+                  - generic [ref=f1e689]: Hold window
+                  - generic [ref=f1e690]: How long a table is held past the reservation time before release.
+                - combobox [ref=f1e691] [cursor=pointer]:
+                  - option "10 min"
+                  - option "15 min" [selected]
+                  - option "20 min"
+          - generic [ref=f1e692]:
+            - heading "Notifications" [level=2] [ref=f1e694]
+            - generic [ref=f1e695]:
+              - generic [ref=f1e696]:
+                - generic [ref=f1e697]:
+                  - generic [ref=f1e698]: Waitlist SMS
+                  - generic [ref=f1e699]: Text guests automatically when their table is ready.
+                - switch [checked] [ref=f1e700]
+              - generic [ref=f1e702]:
+                - generic [ref=f1e703]:
+                  - generic [ref=f1e704]: Pager alerts
+                  - generic [ref=f1e705]: Trigger table-side pagers in addition to SMS.
+                - switch [ref=f1e706]
+              - generic [ref=f1e708]:
+                - generic [ref=f1e709]:
+                  - generic [ref=f1e710]: Nightly email digest
+                  - generic [ref=f1e711]: End-of-service summary of covers, no-shows, and turn times.
+                - switch [checked] [ref=f1e712]
+  - button "Open Next.js Dev Tools" [ref=f1e108] [cursor=pointer]
+  - alert [ref=f1e112]
