@@ -42,6 +42,14 @@ type LiveIn = {
   assignedServerId?: string | null;
 };
 
+async function foreignIdentityCollisions(restaurantId: string, floorIds: string[], tableIds: string[]) {
+  const [floors, tables] = await Promise.all([
+    prisma.floor.findMany({ where: { id: { in: floorIds }, restaurantId: { not: restaurantId } }, select: { id: true } }),
+    prisma.table.findMany({ where: { id: { in: tableIds }, restaurantId: { not: restaurantId } }, select: { id: true } }),
+  ]);
+  return { floors: floors.map((floor) => floor.id), tables: tables.map((table) => table.id) };
+}
+
 /** Most recent daily service-reset tick: (open − 60min), or 4:00 AM when
  *  hours are unset. Mirrored in page.tsx — keep the two in sync. */
 function latestServiceResetBoundary(now: Date, openMinutes: number | null, closeMinutes: number | null): Date {
@@ -151,8 +159,11 @@ export async function PATCH(req: Request) {
 
 // ── PUT: layout snapshot (reconcile to the editor's final state) ─────
 export async function PUT(req: Request) {
+  let restaurantId = "";
+  let incomingFloorIds: string[] = [];
+  let incomingTableIds: string[] = [];
   try {
-    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
+    const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; restaurantId = auth.restaurantId;
     const body = await req.json();
     const floors: FloorIn[] = Array.isArray(body.floors) ? body.floors : [];
     const tables: TableIn[] = Array.isArray(body.tables) ? body.tables : [];
@@ -162,7 +173,7 @@ export async function PUT(req: Request) {
       return Response.json({ ok: false, reason: "empty_snapshot" }, { status: 400 });
     }
 
-    const floorIds = floors.map((f) => String(f.id));
+    const floorIds = [...new Set(floors.map((f) => String(f.id)))];
     // Payload hardening: a duplicate id or a duplicate ACTIVE
     // (floorId, name) pair would abort the whole bulk INSERT under the
     // partial unique index — turning one bad rename into a permanently
@@ -186,6 +197,12 @@ export async function PUT(req: Request) {
       return { ...t, name };
     });
     const tableIds = safeTables.map((t) => String(t.id));
+    incomingFloorIds = floorIds;
+    incomingTableIds = tableIds;
+    const collisions = await foreignIdentityCollisions(restaurantId, floorIds, tableIds);
+    if (collisions.floors.length || collisions.tables.length) {
+      return Response.json({ error: "id_collision", ...collisions }, { status: 409 });
+    }
 
     // ONE bulk upsert instead of N per-row upserts: a 73-table floor was
     // 79 sequential Neon roundtrips inside one transaction (seconds of
@@ -229,6 +246,17 @@ export async function PUT(req: Request) {
 
     return Response.json({ ok: true, floors: floors.length, tables: tables.length });
   } catch (err) {
+    // The preflight above makes this a race-only path. Recheck so a global
+    // primary-key collision can never degrade into a generic save failure.
+    if ((err as { code?: string })?.code === "P2002") {
+      const collisions = await foreignIdentityCollisions(restaurantId, incomingFloorIds, incomingTableIds)
+        .catch(() => ({ floors: incomingFloorIds, tables: incomingTableIds }));
+      return Response.json({
+        error: "id_collision",
+        floors: collisions.floors.length ? collisions.floors : incomingFloorIds,
+        tables: collisions.tables.length ? collisions.tables : incomingTableIds,
+      }, { status: 409 });
+    }
     console.error("[api/floor PUT]", err);
     return Response.json({ error: "save_failed" }, { status: 500 });
   }

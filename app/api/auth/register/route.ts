@@ -28,6 +28,9 @@ export async function POST(req: Request) {
         importAccuracyBannerSeen: false,
         tours: { manager: {}, host: {} },
       } } });
+      // Floor IDs are global. The restaurant's CUID gives its first floor
+      // the same collision-free identity without adding another dependency.
+      await tx.floor.create({ data: { id: `f-${created.id}`, name: "Main Floor", sortOrder: 0, active: true, restaurantId: created.id } });
       // TODO: recovery email delivery
       return created;
     });

@@ -7608,9 +7608,8 @@ export default function Home({ hostMode = false } = {}) {
       return { d, fid };
     });
     const keptTables = tables.filter(t => !replacedFloorIds.has(t.floorId));
-    // Table ids CONTINUE the sequential t{n} scheme (same rule as
-    // addTable): long minted ids leak into the service log, merge join
-    // strings, and the AI assigner's references.
+    // Display labels stay sequential; IDs add a tiny random suffix so a
+    // migration can never collide with another restaurant's global row.
     let maxNum = tables.reduce((m, t) => {
       const idNum = /^t?(\d+)$/.exec(String(t.id));
       const nameNum = String(t.name || '').match(/\d+/);
@@ -7619,8 +7618,8 @@ export default function Home({ hostMode = false } = {}) {
     const existingIds = new Set(tables.map(t => String(t.id)));
     const nextTableId = () => {
       maxNum += 1;
-      let id = `t${maxNum}`;
-      while (existingIds.has(id)) { maxNum += 1; id = `t${maxNum}`; }
+      let id = `t${maxNum}-${Math.random().toString(36).slice(2, 6).padEnd(4, '0')}`;
+      while (existingIds.has(id)) { id = `t${maxNum}-${Math.random().toString(36).slice(2, 6).padEnd(4, '0')}`; }
       existingIds.add(id);
       return id;
     };
@@ -7740,15 +7739,13 @@ export default function Home({ hostMode = false } = {}) {
       const onFloor = prev.filter(t => t.floorId === activeFloorId).length;
       const x = pos ? Math.round(pos.x) : 48 + ((onFloor * 26) % 260);
       const y = pos ? Math.round(pos.y) : 48 + (((onFloor * 26) / 260 | 0) * 96) % 360;
-      // Short, stable id — NOT Date.now(). A 13-digit timestamp id leaks
-      // into the service log ("T1783…"), the merge join strings, and the
-      // AI assigner's table references. Sequential "t{n}" ids read
-      // cleanly everywhere and keep the id ↔ name relationship legible.
+      // Display names stay sequential and legible. The stored id needs a
+      // small entropy suffix because Table.id is global across restaurants.
       const nextNum = maxNum + 1;
       const existingIds = new Set(prev.map(t => String(t.id)));
-      let newId = `t${nextNum}`;
+      let newId = `t${nextNum}-${Math.random().toString(36).slice(2, 6).padEnd(4, '0')}`;
       let bump = nextNum;
-      while (existingIds.has(newId)) { bump += 1; newId = `t${bump}`; }
+      while (existingIds.has(newId)) { bump += 1; newId = `t${bump}-${Math.random().toString(36).slice(2, 6).padEnd(4, '0')}`; }
       // Bare-number archetype ("72", not "T72") — matches the migrated
       // tables and OpenTable convention. Names are unique per floor
       // (partial index), so walk past any collision.
@@ -9351,7 +9348,13 @@ export default function Home({ hostMode = false } = {}) {
           }
           if (Array.isArray(f.floors) && f.floors.length > 0) {
             setFloors(f.floors);
-            setActiveFloorId(prev => f.floors.some(x => x.id === prev) ? prev : f.floors[0].id);
+            setActiveFloorId(f.floors[0].id);
+          } else {
+            // Legacy blank shells predate registration's default floor.
+            // Never revive the global "f1" placeholder after hydration.
+            const id = `f${Date.now()}`;
+            setFloors([{ id, name: 'Main Floor', isManualOnly: false }]);
+            setActiveFloorId(id);
           }
         }
 
