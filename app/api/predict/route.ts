@@ -57,6 +57,30 @@ export const maxDuration = 180;
 
 const DAY = 24 * 60 * 60 * 1000;
 
+function usFederalHoliday(date: string) {
+  const d = new Date(`${date}T12:00:00Z`);
+  const y = d.getUTCFullYear(), m = d.getUTCMonth() + 1, day = d.getUTCDate();
+  const nthWeekday = (month: number, weekday: number, n: number) => {
+    const first = new Date(Date.UTC(y, month - 1, 1)).getUTCDay();
+    return 1 + ((weekday - first + 7) % 7) + (n - 1) * 7;
+  };
+  const lastWeekday = (month: number, weekday: number) => {
+    const last = new Date(Date.UTC(y, month, 0));
+    return last.getUTCDate() - ((last.getUTCDay() - weekday + 7) % 7);
+  };
+  return (m === 1 && (day === 1 || day === nthWeekday(1, 1, 3))) ||
+    (m === 2 && day === nthWeekday(2, 1, 3)) || (m === 5 && day === lastWeekday(5, 1)) ||
+    (m === 6 && day === 19) || (m === 7 && day === 4) || (m === 9 && day === nthWeekday(9, 1, 1)) ||
+    (m === 10 && day === nthWeekday(10, 1, 2)) || (m === 11 && day === 11) ||
+    (m === 11 && day === nthWeekday(11, 4, 4)) || (m === 12 && day === 25);
+}
+
+function monthInRange(month: number, from?: number | string, to?: number | string) {
+  const start = Number(from), end = Number(to);
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || start > 12 || end < 1 || end > 12) return false;
+  return start <= end ? month >= start && month <= end : month >= start || month <= end;
+}
+
 const dateStr = (d: Date) => d.toISOString().slice(0, 10);
 const median = (a: number[]) => {
   if (!a.length) return 0;
@@ -272,6 +296,21 @@ export async function POST(req: Request) {
     // ── Location resolution (settings → env) ────────────────────────
     const settingsRow = await prisma.restaurantSettings.findUnique({ where: { restaurantId } }).catch(() => null);
     const locPref = (settingsRow?.prefs as { location?: { name?: string; lat?: string; lon?: string; address?: string } } | null)?.location || {};
+    const prefs = (settingsRow?.prefs || {}) as {
+      baseline?: { avgCovers?: number; maxCovers?: number; minCovers?: number; resSharePct?: number; holidayBoostPct?: number; eventBoostPct?: number; seasons?: { offFrom?: number; offTo?: number; onFrom?: number; onTo?: number } | null; turnMinutes?: number };
+      daysOpen?: boolean[];
+    };
+    const baseline = prefs.baseline || null;
+    const daysOpen = Array.isArray(prefs.daysOpen) && prefs.daysOpen.length === 7 ? prefs.daysOpen : null;
+    if (daysOpen && !daysOpen[dow]) {
+      return Response.json({
+        date: target, dow, isToday: target === todayStr, generatedAt: new Date().toISOString(), historyDays: 0, research: false,
+        closed: true, covers: { expected: 0, low: 0, high: 0, confidence: "high", method: "closed — owner schedule" },
+        booked: { covers: 0, parties: 0, showRate: 0 }, walkIns: { expected: 0, historicalSharePct: 0 }, hourly: [], peak: { start: "", end: "", covers: 0 }, waitlistLikely: false,
+        turn: { minutes: 0, source: "closed" }, lastTableOut: "", capacity: { seats: 0, tables: 0 }, sections: [], staffing: { crew: 0, crewMethod: "closed", coversPerServer: null, historicalCoversPerServer: null, verdict: "unknown", addServers: 0 },
+        factors: { used: [{ key: "closed", label: "Closed", detail: "owner schedule", impactPct: 0 }], excluded: [] },
+      });
+    }
     const locName = (locPref.name || process.env.RESTAURANT_NAME || "").trim() || undefined;
     const locLat = String(locPref.lat || process.env.RESTAURANT_LAT || "").trim();
     const locLon = String(locPref.lon || process.env.RESTAURANT_LON || "").trim();
@@ -372,6 +411,19 @@ export async function POST(req: Request) {
       excludedFactors.push({ key: "history", label: "Historical covers", reason: "fewer than 3 service days recorded — forecast leans on the reservation book only" });
     }
 
+    // Owner-entered setup priors are deliberately bounded and only bridge the
+    // first two weeks. They never replace accumulated restaurant history.
+    const useBaseline = historyDays < 14 && !!baseline;
+    const avgPrior = Number(baseline?.avgCovers);
+    const minPrior = Number(baseline?.minCovers);
+    const maxPrior = Number(baseline?.maxCovers);
+    if (useBaseline && Number.isFinite(avgPrior) && avgPrior > 0) {
+      base = avgPrior;
+      confidence = "low";
+      method = "owner baseline (setup) — thin history";
+      usedFactors.push({ key: "baseline_covers", label: "owner baseline (setup)", detail: `average ${Math.round(avgPrior)} covers/night`, impactPct: 0 });
+    }
+
     // Last-year seasonality blend
     const lyByDay = new Map<string, number>();
     for (const r of lastYearRows) {
@@ -387,6 +439,18 @@ export async function POST(req: Request) {
       excludedFactors.push({ key: "lastyear", label: "Covers this time last year", reason: "no service history from ~1 year ago" });
     }
 
+    if (useBaseline && baseline?.seasons) {
+      const month = Number(target.slice(5, 7));
+      const season = baseline.seasons;
+      let seasonPct = 0;
+      if (monthInRange(month, season.onFrom, season.onTo)) seasonPct = 15;
+      if (monthInRange(month, season.offFrom, season.offTo)) seasonPct = -15;
+      if (seasonPct) {
+        base *= 1 + seasonPct / 100;
+        usedFactors.push({ key: "baseline_season", label: "owner baseline (setup)", detail: seasonPct > 0 ? "on-season month (+15%)" : "off-season month (−15%)", impactPct: seasonPct });
+      }
+    }
+
     // ── External multipliers ──────────────────────────────────────────
     let mult = 1;
     const dayNum = Number(target.slice(8, 10));
@@ -394,6 +458,13 @@ export async function POST(req: Request) {
     if ([1, 2, 15, 16].includes(dayNum) || dayNum >= monthEnd - 1) {
       mult *= 1.06;
       usedFactors.push({ key: "payday", label: "Payday cycle", detail: "date sits on a pay-cycle boundary (1st / 15th / month-end)", impactPct: 6 });
+    }
+    if (useBaseline && usFederalHoliday(target) && Number.isFinite(Number(baseline?.holidayBoostPct))) {
+      const pct = Math.max(0, Math.min(100, Number(baseline?.holidayBoostPct)));
+      if (pct) {
+        mult *= 1 + pct / 100;
+        usedFactors.push({ key: "baseline_holiday", label: "owner baseline (setup)", detail: `US federal holiday uplift (+${Math.round(pct)}%, clamped)`, impactPct: Math.round(pct) });
+      }
     }
     const lat = locLat, lon = locLon;
     let weather: { tMax: number; tMin: number; precipProb: number } | null = null;
@@ -415,6 +486,13 @@ export async function POST(req: Request) {
       excludedFactors.push({ key: "weather", label: "Weather", reason: "no coordinates configured — set them in Settings → Location" });
     }
     const research = (await researchP) || {};
+    if (useBaseline && !research.events && Number.isFinite(Number(baseline?.eventBoostPct))) {
+      const pct = Math.max(0, Math.min(100, Number(baseline?.eventBoostPct)));
+      if (pct) {
+        mult *= 1 + pct / 100;
+        usedFactors.push({ key: "baseline_events", label: "owner baseline (setup)", detail: `local-event fallback (+${Math.round(pct)}%, web research unavailable)`, impactPct: Math.round(pct) });
+      }
+    }
     {
       // All eight web-derived signals, applied per aspect. An aspect the
       // research couldn't cover this run is listed as excluded with a
@@ -471,7 +549,12 @@ export async function POST(req: Request) {
     if (showFinished + showNo >= 10) {
       usedFactors.push({ key: "book", label: "Reservation book management", detail: `historical show rate ${(showRate * 100).toFixed(0)}% applied to ${bookedCovers} booked covers`, impactPct: 0 });
     }
-    const walkShareHist = days.length ? mean(days.slice(0, 20).map((d) => (d.covers > 0 ? d.walkIn / d.covers : 0))) : 0.3;
+    const walkShareHist = useBaseline && Number.isFinite(Number(baseline?.resSharePct))
+      ? Math.max(0, Math.min(1, (100 - Math.max(0, Math.min(100, Number(baseline?.resSharePct)))) / 100))
+      : days.length ? mean(days.slice(0, 20).map((d) => (d.covers > 0 ? d.walkIn / d.covers : 0))) : 0.3;
+    if (useBaseline && Number.isFinite(Number(baseline?.resSharePct))) {
+      usedFactors.push({ key: "baseline_mix", label: "owner baseline (setup)", detail: `${Math.round(100 - walkShareHist * 100)}% reservations / ${Math.round(walkShareHist * 100)}% walk-ins`, impactPct: 0 });
+    }
 
     let expected = base > 0 ? base * mult : 0;
     const expectedBookShow = Math.round(bookedCovers * showRate);
@@ -481,11 +564,14 @@ export async function POST(req: Request) {
     }
     expected = Math.round(expected);
     const expectedWalkIns = Math.max(0, expected - expectedBookShow);
-    const band = confidence === "high" ? 0.12 : confidence === "medium" ? 0.2 : 0.32;
+    const band = useBaseline && Number.isFinite(minPrior) && Number.isFinite(maxPrior) && avgPrior > 0
+      ? Math.max(0.08, Math.min(0.75, Math.max(Math.abs(avgPrior - minPrior), Math.abs(maxPrior - avgPrior)) / avgPrior))
+      : confidence === "high" ? 0.12 : confidence === "medium" ? 0.2 : 0.32;
 
     // ── Turn time ─────────────────────────────────────────────────────
-    let turnMin = turns.length >= 8 ? median(turns) : 90;
-    const turnSource = turns.length >= 8 ? `median of ${turns.length} recent completed turns` : "default (90m) — not enough completed turns recorded";
+    let turnMin = turns.length >= 8 ? median(turns) : (useBaseline && Number.isFinite(Number(baseline?.turnMinutes)) ? Math.max(30, Math.min(360, Math.round(Number(baseline?.turnMinutes)))) : 90);
+    const turnSource = turns.length >= 8 ? `median of ${turns.length} recent completed turns` : useBaseline && Number.isFinite(Number(baseline?.turnMinutes)) ? "owner baseline (setup)" : "default (90m) — not enough completed turns recorded";
+    if (useBaseline && turns.length < 8 && Number.isFinite(Number(baseline?.turnMinutes))) usedFactors.push({ key: "baseline_turn", label: "owner baseline (setup)", detail: `${turnMin} minute turn`, impactPct: 0 });
     // Staffing adjustment computed after roster below.
 
     // ── Roster / staffing ─────────────────────────────────────────────
