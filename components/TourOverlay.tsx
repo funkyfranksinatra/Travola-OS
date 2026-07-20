@@ -204,7 +204,7 @@ export function TourOverlay({ steps, active = true, onComplete, onStepChange, on
     : { position: 'fixed', right: 16, bottom: 16, zIndex: 71, maxWidth: 'min(330px, calc(100vw - 32px))' };
 
   if (dismissed) return (
-    <div className="fixed bottom-4 right-4 z-[110] pointer-events-none">
+    <div className="fixed bottom-20 right-4 z-[110] pointer-events-none">
       <button onClick={() => setDismissed(false)} className="pointer-events-auto rounded-full border border-ai/60 bg-panel-card px-3 py-2 font-mono text-[10px] font-bold uppercase tracking-[.09em] text-ai shadow-[0_0_22px_rgba(139,139,255,.24)] hover:bg-panel-up">
         {label} · resume tip
       </button>
