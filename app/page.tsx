@@ -1193,10 +1193,9 @@ function FloorMap({
   // preventDefault() must actually stop Safari's page-level pan/zoom.
   // The canvas also sets touch-action:none so iOS never argues.
   useEffect(() => {
-    // The manager view retains its established immediate touch pan. Host
-    // uses the pointer-intent classifier below so a horizontal swipe is
-    // never mistaken for panning.
-    if (hostMode) return undefined;
+    // The host's pointer-intent classifier below owns its single-finger
+    // swipe/hold behavior. Keep this listener for two-finger pinch there
+    // too, so both surfaces use the same zoom clamp.
     const el = document.getElementById('floor-canvas');
     if (!el) return;
     let gesture = null; // { mode: 'pan'|'pinch', ... }
@@ -1214,7 +1213,7 @@ function FloorMap({
           panX: panRef.current.x, panY: panRef.current.y,
         };
         e.preventDefault();
-      } else if (e.touches.length === 1) {
+      } else if (!hostMode && e.touches.length === 1) {
         const t = e.touches[0];
         // Background only — touches on tiles/popups belong to them.
         if (t.target.closest && t.target.closest('[data-table-tile], [data-edit-popup], [data-floor-controls], [data-floor-tab], button, input, select')) { gesture = null; return; }
@@ -1252,10 +1251,12 @@ function FloorMap({
     };
     const onTouchEnd = (e) => {
       if (e.touches.length === 0) { gesture = null; return; }
-      if (gesture && gesture.mode === 'pinch' && e.touches.length === 1) {
+      if (gesture && gesture.mode === 'pinch' && e.touches.length === 1 && !hostMode) {
         // Lift one finger out of a pinch → continue as a pan.
         const t = e.touches[0];
         gesture = { mode: 'pan', x: t.clientX, y: t.clientY, origX: panRef.current.x, origY: panRef.current.y, moved: true };
+      } else if (gesture && gesture.mode === 'pinch' && hostMode) {
+        gesture = null;
       }
     };
     el.addEventListener('touchstart', onTouchStart, { passive: false });
@@ -1285,7 +1286,10 @@ function FloorMap({
       active = null;
     };
     const onPointerDown = (e) => {
-      if (e.pointerType !== 'touch' || e.isPrimary === false || blocked(e.target) || dragState || document.querySelector('[data-party-drag-ghost]')) return;
+      if (e.pointerType !== 'touch' || blocked(e.target) || dragState || document.querySelector('[data-party-drag-ghost]')) return;
+      // A second touch hands control to the shared two-finger pinch handler
+      // above; do not let the first pointer's pending hold become a pan.
+      if (e.isPrimary === false) { finish(); return; }
       const origin = { x: e.clientX, y: e.clientY };
       active = { id: e.pointerId, origin, pan: { ...panRef.current }, mode: 'pending', timer: 0, lastX: e.clientX, lastT: performance.now() };
       active.timer = window.setTimeout(() => {
@@ -1499,23 +1503,10 @@ function FloorMap({
   }, [activeFloorId]);
 
   const panDragRef = useRef(null);
-  // "0%" means fit-to-floor, never a literal zero transform. This keeps
-  // the entire active room reachable while retaining a tiny 5% safety floor
-  // for sparse/oversized imported plans.
-  const minimumZoom = () => {
-    if (typeof document === 'undefined') return 0.05; // SSR/prerender: no DOM; effect-driven fit recomputes on mount
-    const el = document.getElementById('floor-canvas');
-    if (!el || visibleTables.length === 0) return 0.05;
-    const r = el.getBoundingClientRect();
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    visibleTables.forEach(t => {
-      const s = getTableSizePx(t.shape, t.capacity);
-      minX = Math.min(minX, t.x); minY = Math.min(minY, t.y);
-      maxX = Math.max(maxX, t.x + s.width); maxY = Math.max(maxY, t.y + s.height);
-    });
-    const fit = Math.min(r.width / Math.max(1, maxX - minX + 120), r.height / Math.max(1, maxY - minY + 120));
-    return Math.max(0.05, Math.min(1, fit));
-  };
+  // The editor must let an operator zoom out beyond the current content:
+  // sparse layouts need empty canvas space for placing the next table. Fit
+  // remains an explicit action in fitView; it is not the zoom floor.
+  const minimumZoom = () => 0.1;
   const clampZoom = (z) => Math.max(minimumZoom(), Math.min(2, Math.round(z * 100) / 100));
   const commitNumber = (id) => {
     const v = numberDraft.trim();
