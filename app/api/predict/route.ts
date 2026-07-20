@@ -297,7 +297,7 @@ export async function POST(req: Request) {
     const settingsRow = await prisma.restaurantSettings.findUnique({ where: { restaurantId } }).catch(() => null);
     const locPref = (settingsRow?.prefs as { location?: { name?: string; lat?: string; lon?: string; address?: string } } | null)?.location || {};
     const prefs = (settingsRow?.prefs || {}) as {
-      baseline?: { avgCovers?: number; maxCovers?: number; minCovers?: number; resSharePct?: number; holidayBoostPct?: number; eventBoostPct?: number; seasons?: { offFrom?: number; offTo?: number; onFrom?: number; onTo?: number } | null; turnMinutes?: number };
+      baseline?: { avgCovers?: number; maxCovers?: number; minCovers?: number; resSharePct?: number; holidayBoostPct?: number; eventBoostPct?: number; seasons?: { slow?: Array<{ from?: number; to?: number }>; busy?: Array<{ from?: number; to?: number }>; offFrom?: number; offTo?: number; onFrom?: number; onTo?: number } | null; turnMinutes?: number };
       daysOpen?: boolean[];
     };
     const baseline = prefs.baseline || null;
@@ -442,9 +442,14 @@ export async function POST(req: Request) {
     if (useBaseline && baseline?.seasons) {
       const month = Number(target.slice(5, 7));
       const season = baseline.seasons;
+      // Accept the original single on/off pair as well as the setup
+      // flow's repeatable slow/busy ranges so existing restaurants retain
+      // the same deterministic prior.
+      const busyRanges = Array.isArray(season.busy) ? season.busy : [{ from: season.onFrom, to: season.onTo }];
+      const slowRanges = Array.isArray(season.slow) ? season.slow : [{ from: season.offFrom, to: season.offTo }];
       let seasonPct = 0;
-      if (monthInRange(month, season.onFrom, season.onTo)) seasonPct = 15;
-      if (monthInRange(month, season.offFrom, season.offTo)) seasonPct = -15;
+      if (busyRanges.some(range => monthInRange(month, range.from, range.to))) seasonPct = 15;
+      if (slowRanges.some(range => monthInRange(month, range.from, range.to))) seasonPct = -15;
       if (seasonPct) {
         base *= 1 + seasonPct / 100;
         usedFactors.push({ key: "baseline_season", label: "owner baseline (setup)", detail: seasonPct > 0 ? "on-season month (+15%)" : "off-season month (−15%)", impactPct: seasonPct });

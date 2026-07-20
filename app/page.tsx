@@ -1514,7 +1514,7 @@ function FloorMap({
       maxX = Math.max(maxX, t.x + s.width); maxY = Math.max(maxY, t.y + s.height);
     });
     const fit = Math.min(r.width / Math.max(1, maxX - minX + 120), r.height / Math.max(1, maxY - minY + 120));
-    return Math.max(0.05, Math.min(2, fit));
+    return Math.max(0.05, Math.min(1, fit));
   };
   const clampZoom = (z) => Math.max(minimumZoom(), Math.min(2, Math.round(z * 100) / 100));
   const commitNumber = (id) => {
@@ -3811,7 +3811,7 @@ function SettingToggle({ on, onChange }) {
 // Free-type time box for restaurant hours. Parses "8:15", "8:15am",
 // "8:15 PM", "20:15", "815", "8" into minutes-from-midnight; blank
 // commits null. Shows the canonical label when not focused.
-function TimeTextInput({ value, onCommit }) {
+function TimeTextInput({ value, onCommit, listId = undefined }) {
   const [text, setText] = useState('');
   const [editing, setEditing] = useState(false);
   const display = editing ? text : (value == null ? '' : formatMinutesLabel(value));
@@ -3837,6 +3837,7 @@ function TimeTextInput({ value, onCommit }) {
   return (
     <input
       type="text"
+      list={listId}
       value={display}
       placeholder="8:15 AM"
       onFocus={() => { setEditing(true); setText(value == null ? '' : formatMinutesLabel(value)); }}
@@ -5023,7 +5024,7 @@ function ImportOverlay({ tables, onClose, onDone, defaultTurnMinutes = 90, showA
   );
 }
 
-function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], servers = [], roles = [], addServer, removeServer, setServerColor, setServerRoles, addRole, removeRole, restaurantHours = { open: null, close: null }, setRestaurantHours, prefs = {}, setPref, onResetLiveFloor, onOpenImport, onOpenMigrate, onReplayTips = null, restaurantName = '', onSignOut = null }) {
+function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], servers = [], roles = [], addServer, removeServer, setServerColor, setServerRoles, addRole, removeRole, restaurantHours = { open: null, close: null }, setRestaurantHours, prefs = {}, setPref, onResetLiveFloor, onOpenImport, onOpenMigrate, onReplayTips = null, restaurantName = '', onSignOut = null, onLocationConfirmed = null }) {
   // Every knob reads from Home's persisted prefs (previously these were
   // component-local useState — they reset on every tab switch, let alone
   // reloads). The set* shims keep all existing JSX below untouched.
@@ -5041,7 +5042,14 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
   const teamView       = prefs.teamView       ?? false;
   const location = prefs.location || {};
   const daysOpen = Array.isArray(prefs.daysOpen) && prefs.daysOpen.length === 7 ? prefs.daysOpen : [true, true, true, true, true, true, true];
-  const setLoc = (field, val) => { setPref && setPref('location', { ...(prefs.location || {}), [field]: val }); notifyTour('location-entered'); };
+  const setLoc = (field, val) => { setPref && setPref('location', { ...(prefs.location || {}), [field]: val }); };
+  const hasLocationCoordinates = String(location.lat ?? '').trim() && String(location.lon ?? '').trim();
+  const confirmLocation = () => {
+    if (!hasLocationCoordinates) return;
+    setPref && setPref('onboarding', { ...(prefs.onboarding || {}), locationConfirmed: true });
+    notifyTour('location-confirmed');
+    onLocationConfirmed?.();
+  };
   const setTwentyFourHour = (v) => setPref && setPref('twentyFourHour', v);
   const setSoundAlerts    = (v) => setPref && setPref('soundAlerts', v);
   const setAutoAssign     = (v) => setPref && setPref('autoAssign', v);
@@ -5062,6 +5070,7 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
   };
 
   const selectCls = "bg-panel border border-border rounded-lg px-2.5 py-1.5 font-mono text-xs text-ink-50 outline-none focus:border-ai cursor-pointer";
+  const turnOptions = [...new Set(['60', '90', '120', '150', String(turnTime)])].map(Number).sort((a, b) => a - b);
   const rowCls    = "flex items-center justify-between gap-4 py-2.5";
   const labelCls  = "flex flex-col gap-0.5 min-w-0 pr-2";
   const nameCls   = "text-sm text-ink-50";
@@ -5176,6 +5185,9 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
             <p className="font-mono text-[9px] text-ink-500 leading-relaxed">
               Find coordinates by right-clicking your restaurant in Google Maps → the lat, lon pair at the top. Changes save automatically and apply the next time you refresh a forecast.
             </p>
+            <div className="flex justify-end">
+              <button onClick={confirmLocation} disabled={!hasLocationCoordinates} className="rounded-lg bg-ai px-4 py-2 font-mono text-[10px] font-bold uppercase tracking-[.1em] text-bg disabled:cursor-not-allowed disabled:opacity-30">Confirm location</button>
+            </div>
           </div>
         </section>
 
@@ -5246,10 +5258,7 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
                   <span className={hintCls}>Estimated dining duration used for pacing.</span>
                 </div>
                 <select className={selectCls} value={turnTime} onChange={(e) => setTurnTime(e.target.value)}>
-                  <option value="60">60 min</option>
-                  <option value="90">90 min</option>
-                  <option value="120">120 min</option>
-                  <option value="150">150 min</option>
+                  {turnOptions.map(minutes => <option key={minutes} value={minutes}>{minutes} min</option>)}
                 </select>
               </div>
             </div>
@@ -5267,29 +5276,17 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
                 <span className={nameCls}>Opening time</span>
                 <span className={hintCls}>When the timeline axis starts.</span>
               </div>
-              <div className="flex items-center gap-2">
-                <TimeTextInput value={restaurantHours.open} onCommit={(min) => setRestaurantHours && setRestaurantHours(h => ({ ...h, open: min }))} />
-                <select className={selectCls} value={restaurantHours.open == null ? '' : (HOUR_OPTIONS.includes(restaurantHours.open) ? String(restaurantHours.open) : '')} onChange={(e) => setRestaurantHours && setRestaurantHours(h => ({ ...h, open: e.target.value === '' ? null : Number(e.target.value) }))}>
-                  <option value="">Custom</option>
-                  {HOUR_OPTIONS.map(m => <option key={m} value={m}>{formatMinutesLabel(m)}</option>)}
-                </select>
-              </div>
+              <div><TimeTextInput listId="opening-time-options" value={restaurantHours.open} onCommit={(min) => setRestaurantHours && setRestaurantHours(h => ({ ...h, open: min }))} /><datalist id="opening-time-options">{HOUR_OPTIONS.map(m => <option key={m} value={formatMinutesLabel(m)} />)}</datalist></div>
             </div>
             <div className={rowCls}>
               <div className={labelCls}>
                 <span className={nameCls}>Closing time</span>
                 <span className={hintCls}>When the timeline axis ends.</span>
               </div>
-              <div className="flex items-center gap-2">
-                <TimeTextInput value={restaurantHours.close} onCommit={(min) => setRestaurantHours && setRestaurantHours(h => ({ ...h, close: min }))} />
-                <select className={selectCls} value={restaurantHours.close == null ? '' : (HOUR_OPTIONS.includes(restaurantHours.close) ? String(restaurantHours.close) : '')} onChange={(e) => setRestaurantHours && setRestaurantHours(h => ({ ...h, close: e.target.value === '' ? null : Number(e.target.value) }))}>
-                  <option value="">Custom</option>
-                  {HOUR_OPTIONS.map(m => <option key={m} value={m}>{formatMinutesLabel(m)}</option>)}
-                </select>
-              </div>
+              <div><TimeTextInput listId="closing-time-options" value={restaurantHours.close} onCommit={(min) => setRestaurantHours && setRestaurantHours(h => ({ ...h, close: min }))} /><datalist id="closing-time-options">{HOUR_OPTIONS.map(m => <option key={m} value={formatMinutesLabel(m)} />)}</datalist></div>
             </div>
             <div className="py-2.5">
-              <span className={hintCls}>Type an exact time (e.g. 8:15 AM) or pick a common one. Overnight hours are supported — set close earlier than open (e.g. open 10 AM, close 1 AM) and the service day runs past midnight.</span>
+                <span className={hintCls}>Type an exact time (e.g. 8:15 AM) or choose a common one. Overnight hours are supported — set close earlier than open (e.g. open 10 AM, close 1 AM) and the service day runs past midnight.</span>
             </div>
             <div className="py-3 flex items-center justify-between gap-3">
               <div className={labelCls}><span className={nameCls}>Days open</span><span className={hintCls}>Closed dates return a zero-cover forecast.</span></div>
@@ -7463,6 +7460,20 @@ export default function Home({ hostMode = false } = {}) {
     window.addEventListener('travola-tour-event', onTourEvent);
     return () => window.removeEventListener('travola-tour-event', onTourEvent);
   }, [onboarding?.stage, setOnboardingStage]);
+  // Autosave gate: settings only PUT after hydration has applied (or
+  // conclusively failed) — otherwise the autosave effect would race the
+  // GET and overwrite stored settings with defaults on every load.
+  const settingsReady = useRef(false);
+  // Same gate for the live floor-state snapshot: don't PATCH until
+  // hydration has applied (or conclusively failed).
+  const liveReady = useRef(false);
+  // Gates the first paint: until the DB layout/staff/settings land, show
+  // a loader rather than the built-in default floor — otherwise the
+  // defaults flash for a beat before hydration swaps them out.
+  const [hydrated, setHydrated] = useState(false);
+  const [restaurantHours, setRestaurantHours] = useState({ open: null, close: null });
+  const [restaurantName, setRestaurantName] = useState('');
+  const [activeTab,        setActiveTab]        = useState("floor");
   // Tour events make the walkthrough feel immediate, but state owns the
   // settings path. A dismissed nested form or alternate back control can
   // never leave a persisted onboarding stage pointed at an unmounted anchor.
@@ -7491,23 +7502,10 @@ export default function Home({ hostMode = false } = {}) {
     }
     if (onboarding.stage === 'location') {
       const location = prefs.location || {};
-      if (String(location.lat ?? '').trim() && String(location.lon ?? '').trim()) setOnboardingStage('settings-key');
+      const validCoordinates = String(location.lat ?? '').trim() && String(location.lon ?? '').trim();
+      if (validCoordinates && (prefs.onboarding?.locationConfirmed || activeTab !== 'settings')) setOnboardingStage('settings-key');
     }
-  }, [hostMode, onboarding?.done, onboarding?.stage, prefs.teamView, prefs.location?.lat, prefs.location?.lon, servers.length, setOnboardingStage]);
-  // Autosave gate: settings only PUT after hydration has applied (or
-  // conclusively failed) — otherwise the autosave effect would race the
-  // GET and overwrite stored settings with defaults on every load.
-  const settingsReady = useRef(false);
-  // Same gate for the live floor-state snapshot: don't PATCH until
-  // hydration has applied (or conclusively failed).
-  const liveReady = useRef(false);
-  // Gates the first paint: until the DB layout/staff/settings land, show
-  // a loader rather than the built-in default floor — otherwise the
-  // defaults flash for a beat before hydration swaps them out.
-  const [hydrated, setHydrated] = useState(false);
-  const [restaurantHours, setRestaurantHours] = useState({ open: null, close: null });
-  const [restaurantName, setRestaurantName] = useState('');
-  const [activeTab,        setActiveTab]        = useState("floor");
+  }, [activeTab, hostMode, onboarding?.done, onboarding?.stage, prefs.onboarding?.locationConfirmed, prefs.teamView, prefs.location?.lat, prefs.location?.lon, servers.length, setOnboardingStage]);
   const [selectedPartyId,  setSelectedPartyId]  = useState(null);
   const [selectedTableId,  setSelectedTableId]  = useState(null);
   const [selectedReservationId, setSelectedReservationId] = useState(null);
@@ -10059,7 +10057,7 @@ export default function Home({ hostMode = false } = {}) {
           onMigrate={() => { setActiveTab('floor'); setMigrateOpen(true); }}
           onSettings={() => setActiveTab('settings')}
           onImport={() => setImportOpen(true)}
-          onBaseline={(baseline) => setPrefs(p => ({ ...p, baseline, onboarding: { ...(p.onboarding || {}), stage: 'wrap', done: false } }))}
+          onBaseline={(baseline) => setPrefs(p => ({ ...p, baseline, ...(Number.isFinite(Number(baseline.turnMinutes)) ? { turnTime: String(Math.round(Number(baseline.turnMinutes))) } : {}), onboarding: { ...(p.onboarding || {}), stage: 'wrap', done: false } }))}
         />
       )}
       {!hostMode && hydrated && onboarding?.stage === 'editor' && (
@@ -10129,7 +10127,7 @@ export default function Home({ hostMode = false } = {}) {
             const location = prefs.location || {};
             if (String(location.lat ?? '').trim() && String(location.lon ?? '').trim()) setOnboardingStage('settings-key');
           }}
-          steps={[{ id: 'location', anchor: 'location-signals', title: 'Location feeds the forecast', body: 'In Google Maps, right-click your restaurant for latitude and longitude. Add those and your street address here.', advanceOn: 'event:location-entered' }]}
+          steps={[{ id: 'location', anchor: 'location-signals', title: 'Location feeds the forecast', body: 'In Google Maps, right-click your restaurant for latitude and longitude. Add those and your street address here, then confirm.', advanceOn: 'event:location-confirmed' }]}
         />
       )}
       {!hostMode && hydrated && onboarding?.stage === 'settings-key' && (
@@ -10166,7 +10164,7 @@ export default function Home({ hostMode = false } = {}) {
           {activeTab === "timeline" && <TimelineView reservations={todaysReservations} restaurantHours={restaurantHours} onSelectReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} />}
           {activeTab === "waitlist" && <WaitlistView waitlist={waitlist} reservations={todaysReservations} now={now} onSeatParty={seatFromWaitlist} onOpenReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} onDeleteParty={(id) => requestDelete('waitlist', id)} />}
           {activeTab === "predictor" && <PredictorView forecast={predictorData} loading={predictorLoading} error={predictorError} onRefresh={fetchPredictions} date={predictorDate} setDate={setPredictorDate} />}
-          {activeTab === "settings" && <SettingsView setEditMode={setEditMode} setActiveTab={setActiveTab} floors={floors} tables={tables} servers={servers} roles={roles} addServer={addServer} removeServer={removeServer} setServerColor={setServerColor} setServerRoles={setServerRoles} addRole={addRole} removeRole={removeRole} restaurantHours={restaurantHours} setRestaurantHours={setRestaurantHours} prefs={prefs} setPref={setPref} onResetLiveFloor={resetLiveFloor} onOpenImport={() => setImportOpen(true)} onOpenMigrate={() => setMigrateOpen(true)} onReplayTips={replayFeatureTour} restaurantName={restaurantName} onSignOut={() => setSignOutConfirm(true)} />}
+          {activeTab === "settings" && <SettingsView setEditMode={setEditMode} setActiveTab={setActiveTab} floors={floors} tables={tables} servers={servers} roles={roles} addServer={addServer} removeServer={removeServer} setServerColor={setServerColor} setServerRoles={setServerRoles} addRole={addRole} removeRole={removeRole} restaurantHours={restaurantHours} setRestaurantHours={setRestaurantHours} prefs={prefs} setPref={setPref} onResetLiveFloor={resetLiveFloor} onOpenImport={() => setImportOpen(true)} onOpenMigrate={() => setMigrateOpen(true)} onReplayTips={replayFeatureTour} restaurantName={restaurantName} onSignOut={() => setSignOutConfirm(true)} onLocationConfirmed={() => { if (onboarding?.stage === 'location') setOnboardingStage('settings-key'); }} />}
           {activeTab === "calendar" && (
             <CalendarView
               calendarMonth={calendarMonth}
