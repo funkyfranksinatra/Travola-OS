@@ -350,7 +350,7 @@ function useMounted() {
   return mounted;
 }
 
-function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, onOpenService, hostMode = false, onReplayTips = null }) {
+function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, onOpenService, hostMode = false, onReplayTips = null, onSignOut = null }) {
   const mounted = useMounted();
   const time = new Date(now).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   const date = new Date(now).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" });
@@ -408,6 +408,7 @@ function Header({ now, activeTab, setActiveTab, occupancy, coversToday = null, o
           <span className="w-1.5 h-1.5 rounded-full bg-state-avail animate-pulse" />LIVE
         </div>
         {hostMode && onReplayTips && <button onClick={onReplayTips} className="w-6 h-6 rounded-full border border-border-hi text-ink-300 font-mono text-xs hover:border-ai hover:text-ai" title="Replay tips" aria-label="Replay tips">?</button>}
+        {hostMode && onSignOut && <button onClick={onSignOut} className="font-mono text-[9px] uppercase tracking-[.1em] text-ink-400 hover:text-ink-50" title="Sign out">Sign out</button>}
       </div>
     </header>
   );
@@ -5014,7 +5015,7 @@ function ImportOverlay({ tables, onClose, onDone, defaultTurnMinutes = 90, showA
   );
 }
 
-function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], servers = [], roles = [], addServer, removeServer, setServerColor, setServerRoles, addRole, removeRole, restaurantHours = { open: null, close: null }, setRestaurantHours, prefs = {}, setPref, onResetLiveFloor, onOpenImport, onOpenMigrate, onReplayTips = null }) {
+function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], servers = [], roles = [], addServer, removeServer, setServerColor, setServerRoles, addRole, removeRole, restaurantHours = { open: null, close: null }, setRestaurantHours, prefs = {}, setPref, onResetLiveFloor, onOpenImport, onOpenMigrate, onReplayTips = null, restaurantName = '', onSignOut = null }) {
   // Every knob reads from Home's persisted prefs (previously these were
   // component-local useState — they reset on every tab switch, let alone
   // reloads). The set* shims keep all existing JSX below untouched.
@@ -5082,6 +5083,19 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
           <div className="flex items-center justify-between gap-4"><h1 className="font-display text-xl font-bold text-ink-50">Settings</h1>{onReplayTips && <button onClick={onReplayTips} className="font-mono text-[10px] uppercase tracking-[.1em] text-ai hover:text-ink-50">Replay tips</button>}</div>
           <p className="font-mono text-[11px] text-ink-400 tracking-[0.04em]">Service defaults and floor configuration for this location.</p>
         </div>
+
+        <section className="bg-panel border border-border rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-border bg-panel-card">
+            <h2 className="font-mono text-[11px] text-ink-400 tracking-[0.14em] uppercase font-bold">Account</h2>
+          </div>
+          <div className="px-5 py-4 flex items-center justify-between gap-4">
+            <div className="flex flex-col gap-0.5 min-w-0 pr-2">
+              <span className="text-sm text-ink-50 font-semibold">{restaurantName || 'Signed-in restaurant'}</span>
+              <span className="font-mono text-[10px] text-ink-400 leading-snug">Sign in as a different restaurant, or create a new one.</span>
+            </div>
+            {onSignOut && <button onClick={onSignOut} className="flex-shrink-0 px-4 py-2 rounded-lg bg-transparent border border-border-hi text-ink-200 font-mono text-[11px] tracking-[0.08em] uppercase font-bold hover:border-rose-400 hover:text-rose-200 transition-colors">Sign out</button>}
+          </div>
+        </section>
 
         {/* Team */}
         <section className="bg-panel border border-border rounded-xl overflow-hidden">
@@ -7447,6 +7461,7 @@ export default function Home({ hostMode = false } = {}) {
   // defaults flash for a beat before hydration swaps them out.
   const [hydrated, setHydrated] = useState(false);
   const [restaurantHours, setRestaurantHours] = useState({ open: null, close: null });
+  const [restaurantName, setRestaurantName] = useState('');
   const [activeTab,        setActiveTab]        = useState("floor");
   const [selectedPartyId,  setSelectedPartyId]  = useState(null);
   const [selectedTableId,  setSelectedTableId]  = useState(null);
@@ -7483,6 +7498,14 @@ export default function Home({ hostMode = false } = {}) {
     }
     prewarmPrevTabRef.current = activeTab;
   }, [activeTab]);
+  const signOut = useCallback(async () => {
+    if (!window.confirm('Sign out of this restaurant?')) return;
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      window.location.href = hostMode ? '/login?host=1' : '/login';
+    }
+  }, [hostMode]);
 
   // ─── Multi-floor state ───────────────────────────────────────────
   // Floors are the structural grouping above tables. Every table has
@@ -9371,6 +9394,7 @@ export default function Home({ hostMode = false } = {}) {
         if (setR.ok) {
           const st = (await setR.json()).settings;
           if (st) {
+            if (st.restaurantName) setRestaurantName(st.restaurantName);
             if (st.restaurantHours) setRestaurantHours(st.restaurantHours);
             if (Array.isArray(st.roles) && st.roles.length > 0) setRoles(st.roles);
             if (st.prefs) setPrefs(p => ({ ...p, ...st.prefs }));
@@ -9833,7 +9857,7 @@ export default function Home({ hostMode = false } = {}) {
           <div className="font-mono text-[11px] uppercase tracking-[0.15em] text-ink-400">Loading floor…</div>
         </div>
       )}
-      <Header now={now} activeTab={activeTab} setActiveTab={setActiveTab} occupancy={occupancy} coversToday={serviceLog ? serviceLog.covers.total : null} onOpenService={() => setActiveTab('service')} hostMode={hostMode} onReplayTips={hostMode ? replayFeatureTour : null} />
+      <Header now={now} activeTab={activeTab} setActiveTab={setActiveTab} occupancy={occupancy} coversToday={serviceLog ? serviceLog.covers.total : null} onOpenService={() => setActiveTab('service')} hostMode={hostMode} onReplayTips={hostMode ? replayFeatureTour : null} onSignOut={hostMode ? signOut : null} />
       {hydrated && featureTour && (
         <TourOverlay
           steps={featureTourSteps(featureTour.surface, featureTour.tab, historyImported)}
@@ -9949,7 +9973,7 @@ export default function Home({ hostMode = false } = {}) {
           {activeTab === "timeline" && <TimelineView reservations={todaysReservations} restaurantHours={restaurantHours} onSelectReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} />}
           {activeTab === "waitlist" && <WaitlistView waitlist={waitlist} reservations={todaysReservations} now={now} onSeatParty={seatFromWaitlist} onOpenReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} onDeleteParty={(id) => requestDelete('waitlist', id)} />}
           {activeTab === "predictor" && <PredictorView forecast={predictorData} loading={predictorLoading} error={predictorError} onRefresh={fetchPredictions} date={predictorDate} setDate={setPredictorDate} />}
-          {activeTab === "settings" && <SettingsView setEditMode={setEditMode} setActiveTab={setActiveTab} floors={floors} tables={tables} servers={servers} roles={roles} addServer={addServer} removeServer={removeServer} setServerColor={setServerColor} setServerRoles={setServerRoles} addRole={addRole} removeRole={removeRole} restaurantHours={restaurantHours} setRestaurantHours={setRestaurantHours} prefs={prefs} setPref={setPref} onResetLiveFloor={resetLiveFloor} onOpenImport={() => setImportOpen(true)} onOpenMigrate={() => setMigrateOpen(true)} onReplayTips={replayFeatureTour} />}
+          {activeTab === "settings" && <SettingsView setEditMode={setEditMode} setActiveTab={setActiveTab} floors={floors} tables={tables} servers={servers} roles={roles} addServer={addServer} removeServer={removeServer} setServerColor={setServerColor} setServerRoles={setServerRoles} addRole={addRole} removeRole={removeRole} restaurantHours={restaurantHours} setRestaurantHours={setRestaurantHours} prefs={prefs} setPref={setPref} onResetLiveFloor={resetLiveFloor} onOpenImport={() => setImportOpen(true)} onOpenMigrate={() => setMigrateOpen(true)} onReplayTips={replayFeatureTour} restaurantName={restaurantName} onSignOut={signOut} />}
           {activeTab === "calendar" && (
             <CalendarView
               calendarMonth={calendarMonth}

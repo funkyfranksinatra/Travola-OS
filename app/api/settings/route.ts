@@ -9,11 +9,15 @@ import { requireRestaurantId } from "@/lib/tenant";
 export async function GET(req: Request) {
   try {
     const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
-    const row = await prisma.restaurantSettings.findUnique({ where: { restaurantId } });
+    const row = await prisma.restaurantSettings.findUnique({
+      where: { restaurantId },
+      include: { restaurant: { select: { name: true } } },
+    });
     if (!row) return Response.json({ settings: null });
     return Response.json({
       settings: {
         restaurantHours: { open: row.openMinutes, close: row.closeMinutes },
+        restaurantName: row.restaurant.name,
         roles: row.roles,
         prefs: row.prefs ?? {},
       },
