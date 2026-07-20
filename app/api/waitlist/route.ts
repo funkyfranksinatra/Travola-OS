@@ -120,6 +120,10 @@ export async function DELETE(req: Request) {
     const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json().catch(() => ({}));
     const id = String(body.id || new URL(req.url).searchParams.get("id") || "");
+    if (body.tourDemo === true) {
+      await prisma.waitlistEntry.deleteMany({ where: { id, restaurantId, name: "Tour Demo Party" } });
+      return Response.json({ ok: true, tourDemo: true });
+    }
     await prisma.waitlistEntry.updateMany({
       where: { id, restaurantId, status: "WAITING" },
       data: { status: "LEFT", leftTime: new Date() },
