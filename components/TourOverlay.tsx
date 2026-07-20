@@ -11,6 +11,8 @@ export type TourStep = {
   title: string;
   body: string;
   advanceOn: TourAdvance;
+  /** State-driven completion lets a queued tip fast-forward once its work is already done. */
+  complete?: boolean;
   allowNext?: boolean;
   passThrough?: boolean;
 };
@@ -30,17 +32,19 @@ export function useTour() { return useContext(TourContext); }
 
 type Rect = { top: number; left: number; width: number; height: number };
 
-export function TourOverlay({ steps, active = true, onComplete, onStepChange, onSkip, label = 'setup' }: {
+export function TourOverlay({ steps, active = true, onComplete, onStepChange, onSkip, onAdvance, label = 'setup' }: {
   steps: TourStep[];
   active?: boolean;
   onComplete?: () => void;
   onStepChange?: (step: TourStep | null) => void;
   onSkip?: () => void;
+  onAdvance?: (step: TourStep) => void;
   label?: string;
 }) {
   const [index, setIndex] = useState(0);
   const [rects, setRects] = useState<Rect[]>([]);
   const [dismissed, setDismissed] = useState(false);
+  const [cardSize, setCardSize] = useState({ width: 330, height: 180 });
   const cardRef = useRef<HTMLDivElement>(null);
   const maskId = useRef(`travola-tour-mask-${Math.random().toString(36).slice(2)}`).current;
   const step = active ? steps[index] : null;
@@ -51,11 +55,15 @@ export function TourOverlay({ steps, active = true, onComplete, onStepChange, on
   const anchorKey = anchors.join('\u0001');
   const primaryRect = rects[0] || null;
   const advance = useCallback(() => {
+    if (step) {
+      onAdvance?.(step);
+      window.dispatchEvent(new CustomEvent('travola-tour-advance', { detail: step.id }));
+    }
     setIndex(current => {
       if (current + 1 >= steps.length) { onComplete?.(); return current; }
       return current + 1;
     });
-  }, [onComplete, steps.length]);
+  }, [onAdvance, onComplete, step, steps.length]);
   const next = useCallback(() => {
     if (step?.advanceOn.startsWith('event:')) {
       // Do not skip an action-gated stage. Let the user get the card out of
@@ -69,18 +77,53 @@ export function TourOverlay({ steps, active = true, onComplete, onStepChange, on
   useEffect(() => { setIndex(0); }, [active]);
   useEffect(() => { setDismissed(false); }, [active, index]);
   useEffect(() => { onStepChange?.(step); }, [onStepChange, step]);
+  // Events are useful accelerants, but state is the authority. If an
+  // action was completed while a previous card was queued, skip every
+  // already-satisfied step instead of narrating work the user has done.
+  useEffect(() => {
+    if (!active) return;
+    const next = steps.findIndex((candidate, i) => i >= index && !candidate.complete);
+    if (next > index) setIndex(next);
+    else if (next === -1 && steps.length && steps[index]?.complete) onComplete?.();
+  }, [active, index, onComplete, steps]);
+
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const update = () => {
+      const r = el.getBoundingClientRect();
+      setCardSize(current => current.width === r.width && current.height === r.height ? current : { width: r.width, height: r.height });
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [dismissed, step]);
 
   useLayoutEffect(() => {
     if (!anchors.length) { setRects([]); return; }
     const startedAt = Date.now();
     let warned = false;
+    let scrolledFor = '';
     const update = () => {
-      const next = anchors.flatMap(anchor => {
+      const found = anchors.flatMap(anchor => {
         const el = document.querySelector(`[data-tour="${CSS.escape(anchor)}"]`);
-        if (!el) return [];
+        if (!el) return [] as Array<{ anchor: string; el: Element }>;
+        return [{ anchor, el }];
+      });
+      const primary = found[0];
+      if (primary) {
+        const before = primary.el.getBoundingClientRect();
+        const outside = before.bottom < 0 || before.top > window.innerHeight || before.right < 0 || before.left > window.innerWidth;
+        if (outside && scrolledFor !== primary.anchor) {
+          scrolledFor = primary.anchor;
+          primary.el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        }
+      }
+      const next = found.map(({ el }) => {
         const r = el.getBoundingClientRect();
         return [{ top: r.top, left: r.left, width: r.width, height: r.height }];
-      });
+      }).flat();
       if (!next.length) {
         setRects(current => current.length ? [] : current);
         if (!warned && Date.now() - startedAt >= 1500) {
@@ -144,8 +187,18 @@ export function TourOverlay({ steps, active = true, onComplete, onStepChange, on
 
   if (!step) return null;
   const pad = 8;
-  const cardStyle: React.CSSProperties = primaryRect
-    ? { position: 'fixed', top: Math.min(window.innerHeight - 180, Math.max(16, primaryRect.top + primaryRect.height + 14)), left: Math.min(window.innerWidth - 330, Math.max(16, primaryRect.left)), zIndex: 71 }
+  const overlapsHole = (left: number, top: number) => rects.some(rect => left < rect.left + rect.width + pad && left + cardSize.width > rect.left - pad && top < rect.top + rect.height + pad && top + cardSize.height > rect.top - pad);
+  const candidateStyle = primaryRect ? [
+    { left: primaryRect.left, top: primaryRect.top + primaryRect.height + 14 },
+    { left: primaryRect.left, top: primaryRect.top - cardSize.height - 14 },
+    { left: primaryRect.left + primaryRect.width + 14, top: primaryRect.top },
+    { left: primaryRect.left - cardSize.width - 14, top: primaryRect.top },
+    { left: 16, top: window.innerHeight - cardSize.height - 16 },
+    { left: window.innerWidth - cardSize.width - 16, top: window.innerHeight - cardSize.height - 16 },
+  ].map(pos => ({ left: Math.min(window.innerWidth - cardSize.width - 16, Math.max(16, pos.left)), top: Math.min(window.innerHeight - cardSize.height - 16, Math.max(16, pos.top)) })) : [];
+  const cardPosition = candidateStyle.find(pos => !overlapsHole(pos.left, pos.top)) || candidateStyle[0];
+  const cardStyle: React.CSSProperties = cardPosition
+    ? { position: 'fixed', top: cardPosition.top, left: cardPosition.left, zIndex: 111 }
     : { position: 'fixed', right: 16, bottom: 16, zIndex: 71 };
 
   if (dismissed) return (
@@ -173,7 +226,7 @@ export function TourOverlay({ steps, active = true, onComplete, onStepChange, on
         <h2 className="mt-1 font-display text-base font-bold text-ink-50">{step.title}</h2>
         <p className="mt-2 font-mono text-[11px] leading-relaxed text-ink-300">{step.body}</p>
         <div className="mt-4 flex justify-end gap-2">
-          {onSkip && <button onClick={onSkip} className="px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[.1em] text-ink-300 hover:text-ink-50">Skip setup</button>}
+          {onSkip && <button onClick={onSkip} className="px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[.1em] text-ink-300 hover:text-ink-50">{label === 'tips' ? 'Dismiss tips' : 'Skip setup'}</button>}
           <button onClick={next} className="rounded-md bg-ai px-3 py-1.5 font-mono text-[10px] font-bold uppercase tracking-[.1em] text-bg">Next</button>
         </div>
       </div>
