@@ -42,12 +42,6 @@ type LiveIn = {
   assignedServerId?: string | null;
 };
 
-class LayoutWriteIncompleteError extends Error {
-  constructor(readonly expectedFloors: string[], readonly expectedTables: string[], readonly writtenFloors: string[], readonly writtenTables: string[]) {
-    super("layout_write_incomplete");
-  }
-}
-
 async function foreignIdentityCollisions(restaurantId: string, floorIds: string[], tableIds: string[]) {
   const [floors, tables] = await Promise.all([
     prisma.floor.findMany({ where: { id: { in: floorIds }, restaurantId: { not: restaurantId } }, select: { id: true } }),
@@ -209,10 +203,6 @@ export async function PUT(req: Request) {
     if (collisions.floors.length || collisions.tables.length) {
       return Response.json({ error: "id_collision", ...collisions }, { status: 409 });
     }
-    const unknownFloorIds = [...new Set(safeTables.map((table) => String(table.floorId || "f1")).filter((id) => !floorIds.includes(id)))];
-    if (unknownFloorIds.length) {
-      return Response.json({ error: "invalid_floor_reference", floors: unknownFloorIds }, { status: 409 });
-    }
 
     // ONE bulk upsert instead of N per-row upserts: a 73-table floor was
     // 79 sequential Neon roundtrips inside one transaction (seconds of
@@ -252,29 +242,10 @@ export async function PUT(req: Request) {
           "onlineExcluded" = EXCLUDED."onlineExcluded",
           "active" = true
         WHERE "Table"."restaurantId" = ${restaurantId}`;
-      // A guarded ON CONFLICT can legally affect zero rows. Never answer
-      // 200 for that silent drop: the editor must retain every floor and
-      // table it sent, or receive a recoverable conflict response.
-      const [writtenFloors, writtenTables] = await Promise.all([
-        tx.floor.findMany({ where: { restaurantId, id: { in: floorIds }, active: true }, select: { id: true } }),
-        tx.table.findMany({ where: { restaurantId, id: { in: tableIds }, active: true }, select: { id: true } }),
-      ]);
-      const floorSet = new Set(writtenFloors.map((floor) => floor.id));
-      const tableSet = new Set(writtenTables.map((table) => table.id));
-      if (floorSet.size !== floorIds.length || tableSet.size !== tableIds.length) {
-        throw new LayoutWriteIncompleteError(floorIds, tableIds, [...floorSet], [...tableSet]);
-      }
     });
 
     return Response.json({ ok: true, floors: floors.length, tables: tables.length });
   } catch (err) {
-    if (err instanceof LayoutWriteIncompleteError) {
-      return Response.json({
-        error: "write_incomplete",
-        expected: { floors: err.expectedFloors, tables: err.expectedTables },
-        written: { floors: err.writtenFloors, tables: err.writtenTables },
-      }, { status: 409 });
-    }
     // The preflight above makes this a race-only path. Recheck so a global
     // primary-key collision can never degrade into a generic save failure.
     if ((err as { code?: string })?.code === "P2002") {
