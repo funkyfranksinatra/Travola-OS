@@ -1,0 +1,221 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - banner [ref=f1e3]:
+      - generic [ref=f1e6]:
+        - generic [ref=f1e7]: Travola
+        - generic [ref=f1e8]: v1.2
+      - navigation [ref=f1e9]:
+        - button "floor" [ref=f1e10]
+        - button "timeline" [ref=f1e11]
+        - button "waitlist" [ref=f1e12]
+        - button "service" [ref=f1e13]
+        - button "predictor" [ref=f1e14]
+        - button "calendar" [ref=f1e15]
+        - button "settings" [ref=f1e16]
+      - generic [ref=f1e17]:
+        - generic [ref=f1e18]: 2:09 PM·Monday, Jul 20
+        - generic [ref=f1e19]:
+          - button "Covers 0" [ref=f1e20]:
+            - generic [ref=f1e21]: Covers
+            - generic [ref=f1e22]: "0"
+          - generic [ref=f1e23]: Floor
+          - generic [ref=f1e24]: 0/75
+          - generic [ref=f1e25]: 0%
+        - generic [ref=f1e26]: LIVE
+    - button "Open co-pilot" [ref=f1e28]:
+      - generic [ref=f1e29]: ✦
+    - generic [ref=f1e30]:
+      - complementary [ref=f1e31]:
+        - generic [ref=f1e32]:
+          - button "⚡ Walk-In · Quick Seat" [ref=f1e33]:
+            - generic [ref=f1e34]: ⚡
+            - generic [ref=f1e35]: Walk-In · Quick Seat
+          - generic [ref=f1e36]:
+            - generic [ref=f1e37]:
+              - heading "Guest List" [level=3] [ref=f1e38]
+              - generic [ref=f1e39]:
+                - generic [ref=f1e40]: 0 here
+                - text: ·
+                - generic [ref=f1e41]: 0 booked
+                - text: ·
+                - generic [ref=f1e42]: 0 guests
+            - generic [ref=f1e43]: No guests in queue
+            - button "Add reservation" [ref=f1e44]:
+              - generic [ref=f1e45]: +
+              - generic [ref=f1e46]: Add Reservation
+          - generic [ref=f1e48]:
+            - generic [ref=f1e49]:
+              - button "Manual Assign" [disabled] [ref=f1e50]
+              - button "⚡ Auto-Assign" [disabled] [ref=f1e51]
+              - button "Sections" [disabled] [ref=f1e52]
+            - generic [ref=f1e53]:
+              - heading "Bartenders" [level=3] [ref=f1e54]
+              - generic [ref=f1e55]:
+                - text: "0"
+                - generic [ref=f1e56]: / 3
+            - generic [ref=f1e57]:
+              - generic [ref=f1e58] [cursor=pointer]:
+                - generic [ref=f1e59]:
+                  - generic [ref=f1e60]: Abby
+                  - button "Toggle AI exclusion" [ref=f1e61]: AI
+                  - generic [ref=f1e62]: Bar
+                - switch [ref=f1e63]
+              - generic [ref=f1e65] [cursor=pointer]:
+                - generic [ref=f1e66]:
+                  - generic [ref=f1e67]: Allison
+                  - button "Toggle AI exclusion" [ref=f1e68]: AI
+                  - generic [ref=f1e69]: Bar
+                - switch [ref=f1e70]
+              - generic [ref=f1e72] [cursor=pointer]:
+                - generic [ref=f1e73]:
+                  - generic [ref=f1e74]: Serif
+                  - button "Toggle AI exclusion" [ref=f1e75]: AI
+                  - generic [ref=f1e76]: Bar
+                - switch [ref=f1e77]
+            - generic [ref=f1e79]:
+              - heading "Waiters" [level=3] [ref=f1e80]
+              - generic [ref=f1e81]:
+                - text: "0"
+                - generic [ref=f1e82]: / 7
+            - generic [ref=f1e83]:
+              - generic [ref=f1e84] [cursor=pointer]:
+                - generic [ref=f1e85]:
+                  - generic [ref=f1e86]: Darko
+                  - button "Toggle AI exclusion" [ref=f1e87]: AI
+                - switch [ref=f1e88]
+              - generic [ref=f1e90] [cursor=pointer]:
+                - generic [ref=f1e91]:
+                  - generic [ref=f1e92]: Abby
+                  - button "Toggle AI exclusion" [ref=f1e93]: AI
+                - switch [ref=f1e94]
+              - generic [ref=f1e96] [cursor=pointer]:
+                - generic [ref=f1e97]:
+                  - generic [ref=f1e98]: Allison
+                  - button "Toggle AI exclusion" [ref=f1e99]: AI
+                - switch [ref=f1e100]
+              - generic [ref=f1e102] [cursor=pointer]:
+                - generic [ref=f1e103]:
+                  - generic [ref=f1e104]: Maddox
+                  - button "Toggle AI exclusion" [ref=f1e105]: AI
+                - switch [ref=f1e106]
+              - generic [ref=f1e108] [cursor=pointer]:
+                - generic [ref=f1e109]:
+                  - generic [ref=f1e110]: Serif
+                  - button "Toggle AI exclusion" [ref=f1e111]: AI
+                - switch [ref=f1e112]
+              - generic [ref=f1e114] [cursor=pointer]:
+                - generic [ref=f1e115]:
+                  - generic [ref=f1e116]: Clint
+                  - button "Toggle AI exclusion" [ref=f1e117]: AI
+                - switch [ref=f1e118]
+              - generic [ref=f1e120] [cursor=pointer]:
+                - generic [ref=f1e121]:
+                  - generic [ref=f1e122]: Sarah
+                  - button "Toggle AI exclusion" [ref=f1e123]: AI
+                - switch [ref=f1e124]
+      - main [ref=f1e126]:
+        - generic [ref=f1e127]:
+          - generic [ref=f1e128]:
+            - generic [ref=f1e129]:
+              - generic [ref=f1e130]:
+                - button [ref=f1e131]:
+                  - text: Bar
+                  - button "Floor options" [ref=f1e132] [cursor=pointer]: ⋮
+                - button "Patio" [ref=f1e133]
+                - button "Main" [ref=f1e134]
+                - button "Giocondo" [ref=f1e135]
+              - generic [ref=f1e136]:
+                - button "Zoom out" [ref=f1e137]: −
+                - generic [ref=f1e138]: 35%
+                - button "Zoom in" [ref=f1e139]: +
+                - button "Fit all tables" [ref=f1e141]: Fit
+            - generic [ref=f1e143]:
+              - generic [ref=f1e144] [cursor=pointer]:
+                - generic [ref=f1e145]: bar
+                - generic [ref=f1e146]:
+                  - generic [ref=f1e147]: 1-top
+                  - generic [ref=f1e148]: "8"
+              - generic [ref=f1e150] [cursor=pointer]:
+                - generic [ref=f1e151]: 4-top
+                - generic [ref=f1e152]: "81"
+              - generic [ref=f1e154] [cursor=pointer]:
+                - generic [ref=f1e155]: 4-top
+                - generic [ref=f1e156]: "70"
+              - generic [ref=f1e157] [cursor=pointer]:
+                - generic "Table restrictions":
+                  - generic "Excluded from AI": AI⊘
+                - generic [ref=f1e158]:
+                  - generic [ref=f1e159]: 4-top
+                  - generic [ref=f1e160]: "60"
+              - generic [ref=f1e161] [cursor=pointer]:
+                - generic [ref=f1e162]: bar
+                - generic [ref=f1e163]:
+                  - generic [ref=f1e164]: 1-top
+                  - generic [ref=f1e165]: "4"
+              - generic [ref=f1e166] [cursor=pointer]:
+                - generic [ref=f1e167]: bar
+                - generic [ref=f1e168]:
+                  - generic [ref=f1e169]: 1-top
+                  - generic [ref=f1e170]: "3"
+              - generic [ref=f1e171] [cursor=pointer]:
+                - generic [ref=f1e172]: bar
+                - generic [ref=f1e173]:
+                  - generic [ref=f1e174]: 1-top
+                  - generic [ref=f1e175]: "1"
+              - generic [ref=f1e176] [cursor=pointer]:
+                - generic [ref=f1e177]: bar
+                - generic [ref=f1e178]:
+                  - generic [ref=f1e179]: 1-top
+                  - generic [ref=f1e180]: "2"
+              - generic [ref=f1e182] [cursor=pointer]:
+                - generic [ref=f1e183]: 4-top
+                - generic [ref=f1e184]: "82"
+              - generic [ref=f1e185] [cursor=pointer]:
+                - generic "Table restrictions":
+                  - generic "Excluded from AI": AI⊘
+                - generic [ref=f1e186]:
+                  - generic [ref=f1e187]: 2-top
+                  - generic [ref=f1e188]: "61"
+              - generic [ref=f1e189] [cursor=pointer]:
+                - generic "Table restrictions":
+                  - generic "Excluded from AI": AI⊘
+                - generic [ref=f1e190]:
+                  - generic [ref=f1e191]: 4-top
+                  - generic [ref=f1e192]: "62"
+              - generic [ref=f1e194] [cursor=pointer]:
+                - generic [ref=f1e195]: 2-top
+                - generic [ref=f1e196]: "72"
+              - generic [ref=f1e198] [cursor=pointer]:
+                - generic [ref=f1e199]: 4-top
+                - generic [ref=f1e200]: "71"
+              - generic [ref=f1e202] [cursor=pointer]:
+                - generic [ref=f1e203]: 4-top
+                - generic [ref=f1e204]: "80"
+              - generic [ref=f1e205] [cursor=pointer]:
+                - generic [ref=f1e206]: bar
+                - generic [ref=f1e207]:
+                  - generic [ref=f1e208]: 1-top
+                  - generic [ref=f1e209]: "7"
+              - generic [ref=f1e210] [cursor=pointer]:
+                - generic [ref=f1e211]: bar
+                - generic [ref=f1e212]:
+                  - generic [ref=f1e213]: 1-top
+                  - generic [ref=f1e214]: "6"
+              - generic [ref=f1e216] [cursor=pointer]:
+                - generic [ref=f1e217]: 6-top
+                - generic [ref=f1e218]: "83"
+              - generic [ref=f1e219] [cursor=pointer]:
+                - generic [ref=f1e220]: bar
+                - generic [ref=f1e221]:
+                  - generic [ref=f1e222]: 1-top
+                  - generic [ref=f1e223]: "5"
+          - complementary [ref=f1e224]:
+            - generic [ref=f1e225]:
+              - generic [ref=f1e226]: Service log
+              - generic [ref=f1e227]: 0 covers
+            - generic [ref=f1e229]:
+              - generic [ref=f1e230]: Now seated · 0
+              - generic [ref=f1e231]: No parties seated
+              - generic [ref=f1e232]: History · 0
+              - generic [ref=f1e233]: Nothing yet tonight
+  - alert [ref=f1e234]

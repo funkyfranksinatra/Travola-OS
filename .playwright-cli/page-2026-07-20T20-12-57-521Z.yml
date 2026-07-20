@@ -1,0 +1,24 @@
+- generic [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - img "Travola" [ref=e5]
+        - generic [ref=e6]:
+          - heading "TRAVOLA" [level=1] [ref=e7]
+          - paragraph [ref=e8]: NEW RESTAURANT
+      - generic [ref=e9]:
+        - generic [ref=e10]:
+          - text: RESTAURANT NAME
+          - textbox "RESTAURANT NAME" [ref=e11]
+        - generic [ref=e12]:
+          - text: 4-DIGIT PASSCODE
+          - textbox "4-DIGIT PASSCODE" [ref=e13]
+        - generic [ref=e17]:
+          - text: CONFIRM PASSCODE
+          - textbox "CONFIRM PASSCODE" [ref=e18]
+        - generic [ref=e19]:
+          - text: RECOVERY EMAIL (OPTIONAL)
+          - textbox "RECOVERY EMAIL (OPTIONAL)" [ref=e20]
+        - button "CREATE & ENTER" [ref=e21]
+      - button "← BACK TO SIGN IN" [active] [ref=e22]
+  - alert [ref=e16]

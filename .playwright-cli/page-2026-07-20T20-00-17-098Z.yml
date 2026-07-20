@@ -1,0 +1,19 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - img "Travola" [ref=e5]
+        - generic [ref=e6]:
+          - heading "TRAVOLA" [level=1] [ref=e7]
+          - paragraph [ref=e8]: MANAGER
+      - generic [ref=e9]:
+        - generic [ref=e10]:
+          - text: RESTAURANT NAME
+          - textbox "RESTAURANT NAME" [ref=e11]: Volario's
+        - generic [ref=e12]:
+          - text: 4-DIGIT PASSCODE
+          - textbox "4-DIGIT PASSCODE" [ref=e13]: "1412"
+        - button "WORKING…" [disabled] [ref=e26]
+      - button "CREATE RESTAURANT →" [ref=e15]
+  - button "Open Next.js Dev Tools" [ref=e22] [cursor=pointer]
+  - alert [ref=e16]

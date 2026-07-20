@@ -1,0 +1,101 @@
+- generic [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - banner [ref=f1e3]:
+      - generic [ref=f1e6]:
+        - generic [ref=f1e7]: Travola
+        - generic [ref=f1e8]: v1.2
+      - navigation [ref=f1e9]:
+        - button "floor" [ref=f1e10]
+        - button "timeline" [ref=f1e11]
+        - button "waitlist" [ref=f1e12]
+        - button "service" [ref=f1e13]
+        - button "predictor" [ref=f1e14]
+        - button "calendar" [ref=f1e15]
+        - button "settings" [ref=f1e16]
+      - generic [ref=f1e17]:
+        - generic [ref=f1e18]: 2:15 PM·Monday, Jul 20
+        - generic [ref=f1e19]:
+          - button "Covers 0" [ref=f1e20]:
+            - generic [ref=f1e21]: Covers
+            - generic [ref=f1e22]: "0"
+          - generic [ref=f1e23]: Floor
+          - generic [ref=f1e24]: 0/0
+          - generic [ref=f1e25]: 0%
+        - generic [ref=f1e26]: LIVE
+    - button "Floor alert · urgent 8-person party waiting with no available table or plausible seating plan." [ref=f1e108]:
+      - generic [ref=f1e109]: Floor alert · urgent
+      - generic [ref=f1e110]: 8-person party waiting with no available table or plausible seating plan.
+    - button "Open co-pilot" [active] [ref=f1e106]:
+      - generic [ref=f1e107]: ✦
+    - complementary "Co-pilot" [ref=f1e112]:
+      - generic [ref=f1e113]:
+        - generic [ref=f1e114]:
+          - generic [ref=f1e115]: Co-pilot
+          - generic [ref=f1e116]: Advisory · read only
+        - button "Close co-pilot" [ref=f1e117]: ×
+      - generic [ref=f1e119]:
+        - paragraph [ref=f1e120]: Ask for a read on the floor. I advise; your team decides.
+        - button "Which tables will turn next?" [ref=f1e121]
+        - button "Which parties are close to finishing?" [ref=f1e122]
+        - button "Which servers have the highest cover counts tonight?" [ref=f1e123]
+        - button "Which servers need more tables to catch up?" [ref=f1e124]
+      - generic [ref=f1e126]:
+        - textbox "Ask co-pilot…" [ref=f1e127]
+        - button "Send" [disabled] [ref=f1e128]
+    - generic [ref=f1e40]:
+      - complementary [ref=f1e41]:
+        - generic [ref=f1e42]:
+          - button "⚡ Walk-In · Quick Seat" [ref=f1e43]:
+            - generic [ref=f1e44]: ⚡
+            - generic [ref=f1e45]: Walk-In · Quick Seat
+          - generic [ref=f1e46]:
+            - generic [ref=f1e47]:
+              - heading "Guest List" [level=3] [ref=f1e48]
+              - generic [ref=f1e49]:
+                - generic [ref=f1e50]: 0 here
+                - text: ·
+                - generic [ref=f1e51]: 0 booked
+                - text: ·
+                - generic [ref=f1e52]: 0 guests
+            - generic [ref=f1e53]: No guests in queue
+            - button "Add reservation" [ref=f1e54]:
+              - generic [ref=f1e55]: +
+              - generic [ref=f1e56]: Add Reservation
+          - generic [ref=f1e58]:
+            - generic [ref=f1e59]:
+              - button "Manual Assign" [disabled] [ref=f1e60]
+              - button "⚡ Auto-Assign" [disabled] [ref=f1e61]
+              - button "Sections" [disabled] [ref=f1e62]
+            - generic [ref=f1e63]:
+              - heading "Bartenders" [level=3] [ref=f1e64]
+              - generic [ref=f1e65]:
+                - text: "0"
+                - generic [ref=f1e66]: / 0
+            - generic [ref=f1e67]: No bartenders added
+            - generic [ref=f1e68]:
+              - heading "Waiters" [level=3] [ref=f1e69]
+              - generic [ref=f1e70]:
+                - text: "0"
+                - generic [ref=f1e71]: / 0
+            - generic [ref=f1e72]: No waiters added
+      - main [ref=f1e73]:
+        - generic [ref=f1e74]:
+          - generic [ref=f1e76]:
+            - button [ref=f1e78]:
+              - text: Main Floor
+              - button "Floor options" [ref=f1e79] [cursor=pointer]: ⋮
+            - generic [ref=f1e80]:
+              - button "Zoom out" [ref=f1e81]: −
+              - generic [ref=f1e82]: 100%
+              - button "Zoom in" [ref=f1e83]: +
+              - button "Fit all tables" [ref=f1e85]: Fit
+          - complementary [ref=f1e88]:
+            - generic [ref=f1e89]:
+              - generic [ref=f1e90]: Service log
+              - generic [ref=f1e91]: 0 covers
+            - generic [ref=f1e93]:
+              - generic [ref=f1e94]: Now seated · 0
+              - generic [ref=f1e95]: No parties seated
+              - generic [ref=f1e96]: History · 0
+              - generic [ref=f1e97]: Nothing yet tonight
+  - alert [ref=f1e98]

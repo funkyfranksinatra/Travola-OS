@@ -1,0 +1,39 @@
+npm notice run mesaos-web@0.1.0 dev
+npm notice run next dev
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.86.29:3000
+- Environments: .env.local, .env
+✓ Ready in 960ms
+⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of C:\Users\4141e\Documents\MesaOS\mesa-os\package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * C:\Users\4141e\Documents\MesaOS\mesa-os\mesaos-web\package-lock.json
+
+
+ GET /login 200 in 633ms (next.js: 358ms, application-code: 275ms)
+ GET /login 200 in 59ms (next.js: 8ms, application-code: 51ms)
+(node:45668) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+
+To prepare for this change:
+- If you want the current behavior, explicitly use 'sslmode=verify-full'
+- If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+
+See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ POST /api/auth/login 200 in 23.5s (next.js: 236ms, application-code: 23.3s)
+ GET / 200 in 425ms (next.js: 77ms, proxy.ts: 207ms, application-code: 141ms)
+ GET /api/service-day?date=2026-07-20 200 in 508ms (next.js: 64ms, application-code: 444ms)
+ GET /api/servers 200 in 947ms (next.js: 310ms, application-code: 637ms)
+ GET /api/reservations 200 in 1085ms (next.js: 295ms, application-code: 791ms)
+ GET /api/floor 200 in 1092ms (next.js: 134ms, application-code: 958ms)
+ GET /api/service-log?date=2026-07-20 200 in 587ms (next.js: 51ms, application-code: 536ms)
+ GET /api/settings 200 in 1019ms (next.js: 377ms, application-code: 642ms)
+ GET /api/waitlist 200 in 1289ms (next.js: 215ms, application-code: 1074ms)
+ GET /api/health 200 in 311ms (next.js: 44ms, application-code: 267ms)
+ GET /api/service-day?date=2026-07-20 200 in 79ms (next.js: 9ms, application-code: 70ms)
+ PUT /api/settings 200 in 95ms (next.js: 5ms, application-code: 90ms)
+○ Compiling proxy ...
