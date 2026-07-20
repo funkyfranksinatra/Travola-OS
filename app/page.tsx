@@ -2187,6 +2187,7 @@ function FloorMap({
                 {/* click-away layer */}
                 <div className="fixed inset-0 z-40" onClick={() => setFloorMenu(null)} />
                 <div
+                  data-tour="floor-menu-popup"
                   className="fixed z-50 w-64 bg-panel-card border border-border-hi rounded-xl shadow-2xl overflow-hidden py-1"
                   style={{ left: Math.min(floorMenu.x, window.innerWidth - 270), top: floorMenu.y }}
                 >
@@ -2710,6 +2711,7 @@ function FloorMap({
               <div
                 ref={popupRef}
                 data-table-popup
+                data-tour="table-edit-popup"
                 onMouseDown={(e) => e.stopPropagation()}
                 data-edit-popup
                 onClick={(e) => e.stopPropagation()}
@@ -2826,21 +2828,21 @@ function featureTourSteps(surface, tab, historyImported) {
   if (tab !== 'floor') return common[tab] || [];
   return surface === 'host'
     ? [
-        { id: 'floor-menu', anchor: 'floor-menu', title: 'Floor options', body: 'Use this menu to keep a floor or table out of AI suggestions or online reservations.', advanceOn: 'click-anywhere' },
+        { id: 'floor-menu', anchors: ['floor-menu', 'floor-menu-popup'], title: 'Floor options', body: 'Use this menu to keep a floor or table out of AI suggestions or online reservations.', advanceOn: 'click-anywhere' },
         { id: 'staff', anchor: 'staff-sidebar', title: 'Shift roster', body: 'Toggle people on for this shift. AI-excluded staff stay out of Auto-Assign.', advanceOn: 'click-anywhere' },
         { id: 'assign', anchor: 'assignment-controls', title: 'Sections', body: 'Assign mode and Sections let you inspect the floor; Auto-Assign balances eligible tables.', advanceOn: 'click-anywhere' },
-        { id: 'reservation', anchor: 'editor-floor', title: 'Seat with the co-pilot', body: 'A test reservation is ready. Tap a table; Merge & Seat combines tables for larger parties.', advanceOn: 'event:tour-reservation-seated', passThrough: true },
-        { id: 'seated-table', anchor: 'tour-seated-table', title: 'Table details', body: 'Select the table for party tools. This test party is removed when the tour ends.', advanceOn: 'next' },
-        { id: 'walkin', anchor: 'editor-floor', title: 'Walk-ins', body: 'A test walk-in is ready. Seat it with the same co-pilot flow.', advanceOn: 'event:tour-walkin-seated', passThrough: true },
+        { id: 'reservation', anchors: ['editor-floor', 'seating-assist-rail', 'merge-seat', 'merge-seat-bar'], title: 'Seat with the co-pilot', body: 'A test reservation is ready. Tap a table; Merge & Seat combines tables for larger parties.', advanceOn: 'event:tour-reservation-seated', passThrough: true },
+        { id: 'seated-table', anchors: ['tour-seated-table', 'seated-party-panel'], title: 'Table details', body: 'Select the table for party tools. This test party is removed when the tour ends.', advanceOn: 'next' },
+        { id: 'walkin', anchors: ['walk-in', 'walk-in-modal', 'editor-floor', 'seating-assist-rail', 'merge-seat', 'merge-seat-bar'], title: 'Walk-ins', body: 'A test walk-in is ready. Seat it with the same co-pilot flow.', advanceOn: 'event:tour-walkin-seated', passThrough: true },
         { id: 'log', anchor: 'service-log', title: 'Correct the record', body: 'Open Service log to review seated and historical parties and fix mistakes.', advanceOn: 'click-anywhere' },
       ]
     : [
-        { id: 'floor-menu', anchor: 'floor-menu', title: 'Floor options', body: 'Use ⋮ to exclude a floor or table from AI suggestions, or block it from online reservations.', advanceOn: 'click-anywhere' },
+        { id: 'floor-menu', anchors: ['floor-menu', 'floor-menu-popup'], title: 'Floor options', body: 'Use ⋮ to exclude a floor or table from AI suggestions, or block it from online reservations.', advanceOn: 'click-anywhere' },
         { id: 'staff', anchor: 'staff-sidebar', title: 'Shift roster', body: 'Toggle staff on for the shift. AI-excluded people stay out of Auto-Assign.', advanceOn: 'click-anywhere' },
         { id: 'assign', anchor: 'assignment-controls', title: 'Sections', body: 'Manual Assign sets sections one table at a time. Sections shows them all; Auto-Assign balances the available floor.', advanceOn: 'click-anywhere' },
-        { id: 'reservation', anchor: 'editor-floor', title: 'Seat a reservation', body: 'A test reservation is ready. Tap a table: the seater minimizes double-seating and balances loads. Merge & Seat combines two tables for one party.', advanceOn: 'event:tour-reservation-seated', passThrough: true },
-        { id: 'seated-table', anchor: 'tour-seated-table', title: 'Table details', body: 'Select the table for its menu and party panel. This test party is removed when the tour ends.', advanceOn: 'next' },
-        { id: 'walkin', anchor: 'editor-floor', title: 'Walk-ins', body: 'A test walk-in is ready. Seat it with the same co-pilot flow; Merge & Seat still applies.', advanceOn: 'event:tour-walkin-seated', passThrough: true },
+        { id: 'reservation', anchors: ['editor-floor', 'seating-assist-rail', 'merge-seat', 'merge-seat-bar'], title: 'Seat a reservation', body: 'A test reservation is ready. Tap a table: the seater minimizes double-seating and balances loads. Merge & Seat combines two tables for one party.', advanceOn: 'event:tour-reservation-seated', passThrough: true },
+        { id: 'seated-table', anchors: ['tour-seated-table', 'seated-party-panel'], title: 'Table details', body: 'Select the table for its menu and party panel. This test party is removed when the tour ends.', advanceOn: 'next' },
+        { id: 'walkin', anchors: ['walk-in', 'walk-in-modal', 'editor-floor', 'seating-assist-rail', 'merge-seat', 'merge-seat-bar'], title: 'Walk-ins', body: 'A test walk-in is ready. Seat it with the same co-pilot flow; Merge & Seat still applies.', advanceOn: 'event:tour-walkin-seated', passThrough: true },
         { id: 'log', anchor: 'service-log', title: 'Service log', body: 'Open any seated or past party here to correct a mistake.', advanceOn: 'click-anywhere' },
       ];
 }
@@ -3370,7 +3372,7 @@ function TeamManagementView({
 
         {/* Add team member */}
         {adding ? (
-          <div className="bg-panel border border-ai/40 rounded-xl p-5 flex flex-col gap-4">
+          <div data-tour="add-member-form" className="bg-panel border border-ai/40 rounded-xl p-5 flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
               <label className="font-mono text-[10px] text-ink-400 uppercase tracking-[0.12em]">Name</label>
               <input
@@ -6730,7 +6732,7 @@ function WalkInModal({ onClose, onSubmit, onSendToWaitlist }) {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-[fadeIn_0.18s_ease-out]" onClick={submitting ? undefined : onClose}>
-      <div className="bg-panel border border-ai/40 rounded-2xl shadow-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
+      <div data-tour="walk-in-modal" className="bg-panel border border-ai/40 rounded-2xl shadow-2xl p-6 w-full max-w-md" onClick={e => e.stopPropagation()}>
         <div className="flex items-baseline justify-between mb-5">
           <h3 className="font-display text-xl font-bold text-ink-50 flex items-center gap-2">
             <span className="text-ai">⚡</span> Walk-In
@@ -6851,7 +6853,7 @@ function SeatingAssistRail({ aiThinking, selectedPartyId, reassignReservationId,
     .map(id => { const t = tables.find(x => x.id === id); return t ? t.name : null; })
     .filter(Boolean);
   return (
-    <aside className="w-[248px] flex-shrink-0 border-l border-border-hi bg-panel flex flex-col overflow-hidden">
+    <aside data-tour="seating-assist-rail" className="w-[248px] flex-shrink-0 border-l border-border-hi bg-panel flex flex-col overflow-hidden">
       <div className={`px-3 py-2.5 border-b flex items-center gap-2 flex-shrink-0 ${aiThinking ? 'border-ai/40' : 'border-state-avail/40'}`}>
         {aiThinking ? (
           <svg className="animate-spin text-ai flex-shrink-0" width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" /><path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" /></svg>
@@ -6882,6 +6884,7 @@ function SeatingAssistRail({ aiThinking, selectedPartyId, reassignReservationId,
       </div>
       <div className="px-3 py-3 border-t border-border-hi flex flex-col gap-2 flex-shrink-0">
         <button
+          data-tour="merge-seat"
           onClick={onMerge}
           disabled={aiThinking}
           title="Combine adjacent tables — the party is placed there automatically when the merge is confirmed"
@@ -7053,7 +7056,7 @@ function TableDetailsPanel({ table, servers, now, reservations = [], shiftWindow
   const canClear       = isOccupied || isBussing;  // Reserved isn't "cleared" — use a different flow for that
 
   return (
-    <aside className={`${overlay ? 'fixed inset-y-0 right-0 z-40 w-[min(320px,88vw)] shadow-2xl animate-[mesa-rail-in_0.2s_ease-out]' : 'w-80 flex-shrink-0'} bg-panel border-l border-border p-4 flex flex-col overflow-y-auto`}>
+    <aside data-tour="seated-party-panel" className={`${overlay ? 'fixed inset-y-0 right-0 z-40 w-[min(320px,88vw)] shadow-2xl animate-[mesa-rail-in_0.2s_ease-out]' : 'w-80 flex-shrink-0'} bg-panel border-l border-border p-4 flex flex-col overflow-y-auto`}>
       {/* Header — title + mini status line + close */}
       <div className="flex items-start justify-between mb-4">
         <div className="min-w-0">
@@ -7268,7 +7271,7 @@ function ReservationDetailsSidebar({
     : (selectedPartyId === reservation.id ? 'Finding…' : '—');
 
   return (
-    <aside data-reservation-panel className="relative w-80 bg-panel border-l border-border p-4 flex flex-col flex-shrink-0 overflow-y-auto">
+    <aside data-reservation-panel data-tour="seated-party-panel" className="relative w-80 bg-panel border-l border-border p-4 flex flex-col flex-shrink-0 overflow-y-auto">
       {/* Header — party name + size · time + status + close. Uses the
           exact same flex/typography classes as TableDetailsPanel. */}
       <div className="flex items-start justify-between mb-4">
@@ -7443,6 +7446,7 @@ export default function Home({ hostMode = false } = {}) {
   const setOnboardingStage = useCallback((stage) => setPrefs(p => ({ ...p, onboarding: { ...(p.onboarding || {}), stage, done: false } })), []);
   const finishOnboarding = useCallback(() => setPrefs(p => ({ ...p, onboarding: { ...(p.onboarding || {}), stage: 'done', done: true } })), []);
   const teamAddStartingCount = useRef(null);
+  const onboardingEditorWasOpen = useRef(false);
   useEffect(() => {
     const onTourEvent = (event) => {
       if (onboarding?.stage === 'migration' && event.detail === 'migration-committed') setOnboardingStage('editor-reposition');
@@ -8008,6 +8012,20 @@ export default function Home({ hostMode = false } = {}) {
   // mutual exclusions in handleTableClick.
   const [reassignReservationId, setReassignReservationId] = useState(null);
   const [editMode,         setEditMode]         = useState(false);
+  // State-driven B3 handoff. The ref prevents a persisted editor stage from
+  // advancing during the one render before the restore effect reopens it.
+  useEffect(() => {
+    if (hostMode || !onboarding || onboarding.done || !['editor', 'editor-reposition', 'floors'].includes(onboarding.stage)) {
+      onboardingEditorWasOpen.current = false;
+      return;
+    }
+    if (editMode) {
+      onboardingEditorWasOpen.current = true;
+    } else if (onboardingEditorWasOpen.current) {
+      onboardingEditorWasOpen.current = false;
+      setOnboardingStage('settings');
+    }
+  }, [editMode, hostMode, onboarding?.done, onboarding?.stage, setOnboardingStage]);
   // ── Single-flow guard ───────────────────────────────────────────────
   // Exactly one "click a table" flow may be live at a time. Without this,
   // starting a walk-in while a reservation was still awaiting its table
@@ -8143,6 +8161,11 @@ export default function Home({ hostMode = false } = {}) {
   const tourSurface = hostMode ? 'host' : 'manager';
   const historyImported = reservations.some(r => ['opentable', 'resy', 'paper'].includes(String(r.source || '').toLowerCase()));
   const abandonedTourSweepRef = useRef(false);
+  // This is the app-wide tour mutex. Onboarding owns it absolutely; feature
+  // tours cannot arm while setup is unfinished or while the floor editor is open.
+  const onboardingTourActive = !hostMode && !!onboarding && onboarding.done !== true;
+  const featureTourEligible = hydrated && !editMode && (hostMode || onboarding?.done === true);
+  const tourMutex = onboardingTourActive ? 'onboarding' : featureTour ? 'feature' : null;
 
   const clearTourState = useCallback((surface) => {
     setPrefs(p => {
@@ -8152,7 +8175,7 @@ export default function Home({ hostMode = false } = {}) {
     });
   }, []);
 
-  const completeFeatureTour = useCallback((tour = featureTour) => {
+  const discardFeatureTour = useCallback(() => {
     const ids = Object.values(prefs.tourState?.[tourSurface]?.partyIds || {}).filter(Boolean);
     if (ids.length) {
       const idSet = new Set(ids);
@@ -8164,10 +8187,14 @@ export default function Home({ hostMode = false } = {}) {
       setSelectedPartyId(prev => idSet.has(prev) ? null : prev);
     }
     clearTourState(tourSurface);
-    if (tour) setPrefs(p => ({ ...p, tours: { ...(p.tours || {}), [tour.surface]: { ...((p.tours || {})[tour.surface] || {}), [tour.tab]: true } } }));
     setFeatureTourStep(null);
     setFeatureTour(null);
-  }, [clearTourState, featureTour, prefs.tourState, tourSurface]);
+  }, [clearTourState, prefs.tourState, tourSurface]);
+
+  const completeFeatureTour = useCallback((tour = featureTour) => {
+    discardFeatureTour();
+    if (tour) setPrefs(p => ({ ...p, tours: { ...(p.tours || {}), [tour.surface]: { ...((p.tours || {})[tour.surface] || {}), [tour.tab]: true } } }));
+  }, [discardFeatureTour, featureTour]);
 
   const replayFeatureTour = useCallback(() => {
     const tab = !hostMode && activeTab === 'settings' ? 'floor' : activeTab;
@@ -8197,10 +8224,18 @@ export default function Home({ hostMode = false } = {}) {
   }, [clearTourState, hydrated, prefs.tourState, tourSurface]);
 
   useEffect(() => {
-    if (!hydrated || featureTour || (!hostMode && onboarding && !onboarding.done)) return;
+    if (!featureTourEligible || tourMutex || featureTour) return;
     const done = !!(prefs.tours && prefs.tours[tourSurface] && prefs.tours[tourSurface][activeTab]);
     if (!done && featureTourSteps(tourSurface, activeTab, historyImported).length) setFeatureTour({ surface: tourSurface, tab: activeTab });
-  }, [activeTab, featureTour, historyImported, hostMode, hydrated, onboarding, prefs.tours, tourSurface]);
+  }, [activeTab, featureTour, featureTourEligible, historyImported, prefs.tours, tourMutex, tourSurface]);
+
+  // If a future path opens the editor or re-enters setup mid-tour, dismiss
+  // the feature overlay without marking it seen. It will arm on the first
+  // eligible tab visit and any ephemeral demo party is swept immediately.
+  useEffect(() => {
+    if (!featureTour || featureTourEligible) return;
+    discardFeatureTour();
+  }, [discardFeatureTour, featureTour, featureTourEligible]);
 
   useEffect(() => {
     if (featureTour?.tab !== 'floor' || !featureTourStep) return;
@@ -9893,7 +9928,7 @@ export default function Home({ hostMode = false } = {}) {
         </div>
       )}
       <Header now={now} activeTab={activeTab} setActiveTab={setActiveTab} occupancy={occupancy} coversToday={serviceLog ? serviceLog.covers.total : null} onOpenService={() => setActiveTab('service')} hostMode={hostMode} onReplayTips={hostMode ? replayFeatureTour : null} onSignOut={hostMode ? signOut : null} />
-      {hydrated && featureTour && (
+      {featureTourEligible && tourMutex === 'feature' && featureTour && (
         <TourOverlay
           steps={featureTourSteps(featureTour.surface, featureTour.tab, historyImported)}
           label="tips"
@@ -9922,7 +9957,7 @@ export default function Home({ hostMode = false } = {}) {
             { id: 'zone', anchor: 'editor-zone-picker', title: 'Choose a zone', body: 'Pick the zone this table belongs to. Dining is ready to go.', advanceOn: 'event:zone-picked', allowNext: true, passThrough: true },
             { id: 'shape', anchor: 'editor-shapes', title: 'Place a table', body: 'Pick a shape, set seats, then drag it onto the floor.', advanceOn: 'event:table-dropped', passThrough: true },
             { id: 'reposition', title: 'Set the layout', body: 'Drag tables anywhere to reposition them.', advanceOn: 'click-anywhere' },
-            { id: 'details', anchor: 'placed-table', title: 'Fine-tune a table', body: 'Tap it for delete, rotate, shape, seats, zone, and renumber controls.', advanceOn: 'click-anywhere' },
+            { id: 'details', anchors: ['placed-table', 'table-edit-popup'], title: 'Fine-tune a table', body: 'Tap it for delete, rotate, shape, seats, zone, and renumber controls.', advanceOn: 'click-anywhere' },
           ]}
         />
       )}
@@ -9932,7 +9967,7 @@ export default function Home({ hostMode = false } = {}) {
           onComplete={() => setOnboardingStage('floors')}
           steps={[
             { id: 'reposition', title: 'Set the layout', body: 'Drag tables anywhere to reposition them.', advanceOn: 'click-anywhere' },
-            { id: 'details', anchor: 'placed-table', title: 'Fine-tune a table', body: 'Tap it for delete, rotate, shape, seats, zone, and renumber controls.', advanceOn: 'click-anywhere' },
+            { id: 'details', anchors: ['placed-table', 'table-edit-popup'], title: 'Fine-tune a table', body: 'Tap it for delete, rotate, shape, seats, zone, and renumber controls.', advanceOn: 'click-anywhere' },
           ]}
         />
       )}
@@ -9964,7 +9999,7 @@ export default function Home({ hostMode = false } = {}) {
         <TourOverlay
           onSkip={finishOnboarding}
           onComplete={() => setOnboardingStage('team-exit')}
-          steps={[{ id: 'member', anchor: 'add-member', title: 'Add a member', body: 'Add your first team member. You can fill in roles and colors later.', advanceOn: 'event:member-added', passThrough: true }]}
+          steps={[{ id: 'member', anchors: ['add-member', 'add-member-form'], title: 'Add a member', body: 'Add your first team member. You can fill in roles and colors later.', advanceOn: 'event:member-added', passThrough: true }]}
         />
       )}
       {!hostMode && hydrated && onboarding?.stage === 'team-exit' && (
@@ -10336,7 +10371,7 @@ export default function Home({ hostMode = false } = {}) {
           bottom-center, above the toast slot, so a confirmation toast
           (e.g., "Tables merged") later in the same flow doesn't overlap. */}
       {mergeMode && (
-        <div className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-panel border border-ai shadow-2xl shadow-ai/20 rounded-2xl p-4 z-50 flex items-center gap-6 animate-[fadeIn_0.2s_ease-out]">
+        <div data-tour="merge-seat-bar" className="fixed bottom-8 left-1/2 -translate-x-1/2 bg-panel border border-ai shadow-2xl shadow-ai/20 rounded-2xl p-4 z-50 flex items-center gap-6 animate-[fadeIn_0.2s_ease-out]">
           <div className="text-sm font-medium text-ink-50">
             Select <strong className="text-ai">adjacent</strong> tables to merge <span className="ml-2 px-2 py-0.5 rounded-full bg-ai/20 text-ai font-mono text-xs">{mergeSelection.length} selected</span>
             {mergeSelection.length >= 2 && !isSelectionContiguous(mergeSelection, tables) && (
