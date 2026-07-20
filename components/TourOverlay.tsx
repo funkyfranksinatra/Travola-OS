@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 export type TourAdvance = `event:${string}` | 'click-anywhere' | 'next';
 export type TourStep = {
@@ -38,6 +38,7 @@ export function TourOverlay({ steps, active = true, onComplete, onStepChange, on
 }) {
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<Rect>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const step = active ? steps[index] : null;
   const advance = useCallback(() => {
     setIndex(current => {
@@ -51,16 +52,31 @@ export function TourOverlay({ steps, active = true, onComplete, onStepChange, on
 
   useLayoutEffect(() => {
     if (!step?.anchor) { setRect(null); return; }
+    const startedAt = Date.now();
+    let warned = false;
     const update = () => {
       const el = document.querySelector(`[data-tour="${CSS.escape(step.anchor!)}"]`);
-      if (!el) { setRect(null); return; }
+      if (!el) {
+        setRect(current => current === null ? current : null);
+        if (!warned && Date.now() - startedAt >= 1500) {
+          warned = true;
+          if (process.env.NODE_ENV !== 'production') console.warn(`[tour] missing data-tour anchor: ${step.anchor}`);
+        }
+        return;
+      }
       const r = el.getBoundingClientRect();
-      setRect({ top: r.top, left: r.left, width: r.width, height: r.height });
+      const next = { top: r.top, left: r.left, width: r.width, height: r.height };
+      setRect(current => current && current.top === next.top && current.left === next.left && current.width === next.width && current.height === next.height ? current : next);
     };
     update();
+    const poll = window.setInterval(update, 150);
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
-    return () => { window.removeEventListener('resize', update); window.removeEventListener('scroll', update, true); };
+    return () => {
+      window.clearInterval(poll);
+      window.removeEventListener('resize', update);
+      window.removeEventListener('scroll', update, true);
+    };
   }, [step?.anchor]);
 
   // The context is deliberately event-only; custom events keep this small
@@ -74,6 +90,33 @@ export function TourOverlay({ steps, active = true, onComplete, onStepChange, on
     return () => window.removeEventListener('travola-tour-event', handler);
   }, [advance, step?.advanceOn]);
 
+  // Visuals never intercept clicks. This capture listener keeps the lit
+  // target interactive, advances click-anywhere steps from the dim area,
+  // and blocks only deliberate blocking steps outside their target.
+  useEffect(() => {
+    if (!step || (!rect && step.anchor)) return;
+    const pad = 8;
+    const onClick = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Node && cardRef.current?.contains(target)) return;
+      const insideSpotlight = !!rect && event.clientX >= rect.left - pad
+        && event.clientX <= rect.left + rect.width + pad
+        && event.clientY >= rect.top - pad
+        && event.clientY <= rect.top + rect.height + pad;
+      if (insideSpotlight) return;
+      if (step.advanceOn === 'click-anywhere') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        advance();
+      } else if (!step.passThrough) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }
+    };
+    document.addEventListener('click', onClick, true);
+    return () => document.removeEventListener('click', onClick, true);
+  }, [advance, rect, step]);
+
   if (!step) return null;
   const pad = 8;
   const cardStyle: React.CSSProperties = rect
@@ -81,15 +124,9 @@ export function TourOverlay({ steps, active = true, onComplete, onStepChange, on
     : { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 71 };
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[70]" aria-live="polite">
-      {rect ? <>
-        <div className={`fixed inset-x-0 top-0 bg-black/70 ${step.passThrough ? 'pointer-events-none' : 'pointer-events-auto'}`} style={{ height: Math.max(0, rect.top - pad) }} onClick={() => step.advanceOn === 'click-anywhere' && advance()} />
-        <div className={`fixed bottom-0 left-0 bg-black/70 ${step.passThrough ? 'pointer-events-none' : 'pointer-events-auto'}`} style={{ top: rect.top - pad, width: Math.max(0, rect.left - pad) }} onClick={() => step.advanceOn === 'click-anywhere' && advance()} />
-        <div className={`fixed bottom-0 right-0 bg-black/70 ${step.passThrough ? 'pointer-events-none' : 'pointer-events-auto'}`} style={{ top: rect.top - pad, left: rect.left + rect.width + pad }} onClick={() => step.advanceOn === 'click-anywhere' && advance()} />
-        <div className={`fixed inset-x-0 bottom-0 bg-black/70 ${step.passThrough ? 'pointer-events-none' : 'pointer-events-auto'}`} style={{ top: rect.top + rect.height + pad }} onClick={() => step.advanceOn === 'click-anywhere' && advance()} />
-        <div className="fixed rounded-xl ring-2 ring-ai pointer-events-none" style={{ top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2 }} />
-      </> : <div className={`absolute inset-0 bg-black/70 ${step.passThrough ? 'pointer-events-none' : 'pointer-events-auto'}`} onClick={() => step.advanceOn === 'click-anywhere' && advance()} />}
-      <div className="pointer-events-auto w-[min(330px,calc(100vw-32px)) rounded-xl border border-ai/70 bg-panel-card p-4 shadow-[0_0_35px_rgba(139,139,255,.38)]" style={cardStyle} onClick={(e) => e.stopPropagation()}>
+    <div className="pointer-events-none fixed inset-0 z-[110]" aria-live="polite">
+      {rect && <div className="fixed rounded-xl border border-ai/80 ring-2 ring-ai/80 pointer-events-none" style={{ top: rect.top - pad, left: rect.left - pad, width: rect.width + pad * 2, height: rect.height + pad * 2, boxShadow: '0 0 0 100vmax rgba(0,0,0,0.7)' }} />}
+      <div ref={cardRef} className="pointer-events-auto w-[min(330px,calc(100vw-32px)) rounded-xl border border-ai/70 bg-panel-card p-4 shadow-[0_0_35px_rgba(139,139,255,.38)]" style={cardStyle} onClick={(e) => e.stopPropagation()}>
         <div className="font-mono text-[9px] uppercase tracking-[.16em] text-ai">{label} · {index + 1}/{steps.length}</div>
         <h2 className="mt-1 font-display text-base font-bold text-ink-50">{step.title}</h2>
         <p className="mt-2 font-mono text-[11px] leading-relaxed text-ink-300">{step.body}</p>

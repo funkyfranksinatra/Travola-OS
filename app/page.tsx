@@ -5249,7 +5249,7 @@ function SettingsView({ setEditMode, setActiveTab, floors = [], tables = [], ser
         </section>
 
         {/* Hours */}
-        <section className="bg-panel border border-border rounded-xl overflow-hidden">
+        <section data-tour="hours-days-open" className="bg-panel border border-border rounded-xl overflow-hidden">
           <div className="px-5 py-3 border-b border-border bg-panel-card">
             <h2 className="font-mono text-[11px] text-ink-400 tracking-[0.14em] uppercase font-bold">Hours</h2>
           </div>
@@ -7442,6 +7442,7 @@ export default function Home({ hostMode = false } = {}) {
   const onboarding = prefs.onboarding || null;
   const setOnboardingStage = useCallback((stage) => setPrefs(p => ({ ...p, onboarding: { ...(p.onboarding || {}), stage, done: false } })), []);
   const finishOnboarding = useCallback(() => setPrefs(p => ({ ...p, onboarding: { ...(p.onboarding || {}), stage: 'done', done: true } })), []);
+  const teamAddStartingCount = useRef(null);
   useEffect(() => {
     const onTourEvent = (event) => {
       if (onboarding?.stage === 'migration' && event.detail === 'migration-committed') setOnboardingStage('editor-reposition');
@@ -7449,6 +7450,37 @@ export default function Home({ hostMode = false } = {}) {
     window.addEventListener('travola-tour-event', onTourEvent);
     return () => window.removeEventListener('travola-tour-event', onTourEvent);
   }, [onboarding?.stage, setOnboardingStage]);
+  // Tour events make the walkthrough feel immediate, but state owns the
+  // settings path. A dismissed nested form or alternate back control can
+  // never leave a persisted onboarding stage pointed at an unmounted anchor.
+  useEffect(() => {
+    if (hostMode || !onboarding || onboarding.done) return;
+    if (onboarding.stage === 'team') {
+      teamAddStartingCount.current = null;
+      if (prefs.teamView) setOnboardingStage('team-add');
+      return;
+    }
+    if (onboarding.stage === 'team-add') {
+      if (!prefs.teamView) {
+        teamAddStartingCount.current = null;
+        setOnboardingStage('team');
+      } else if (teamAddStartingCount.current == null) {
+        teamAddStartingCount.current = servers.length;
+      } else if (servers.length > teamAddStartingCount.current) {
+        setOnboardingStage('team-exit');
+      }
+      return;
+    }
+    teamAddStartingCount.current = null;
+    if (onboarding.stage === 'team-exit') {
+      if (!prefs.teamView) setOnboardingStage('location');
+      return;
+    }
+    if (onboarding.stage === 'location') {
+      const location = prefs.location || {};
+      if (String(location.lat ?? '').trim() && String(location.lon ?? '').trim()) setOnboardingStage('settings-key');
+    }
+  }, [hostMode, onboarding?.done, onboarding?.stage, prefs.teamView, prefs.location?.lat, prefs.location?.lon, servers.length, setOnboardingStage]);
   // Autosave gate: settings only PUT after hydration has applied (or
   // conclusively failed) — otherwise the autosave effect would race the
   // GET and overwrite stored settings with defaults on every load.
@@ -9945,8 +9977,18 @@ export default function Home({ hostMode = false } = {}) {
       {!hostMode && hydrated && onboarding?.stage === 'location' && (
         <TourOverlay
           onSkip={finishOnboarding}
-          onComplete={() => setOnboardingStage('history')}
+          onComplete={() => {
+            const location = prefs.location || {};
+            if (String(location.lat ?? '').trim() && String(location.lon ?? '').trim()) setOnboardingStage('settings-key');
+          }}
           steps={[{ id: 'location', anchor: 'location-signals', title: 'Location feeds the forecast', body: 'In Google Maps, right-click your restaurant for latitude and longitude. Add those and your street address here.', advanceOn: 'event:location-entered' }]}
+        />
+      )}
+      {!hostMode && hydrated && onboarding?.stage === 'settings-key' && (
+        <TourOverlay
+          onSkip={finishOnboarding}
+          onComplete={() => setOnboardingStage('history')}
+          steps={[{ id: 'hours-days-open', anchor: 'hours-days-open', title: 'Hours shape the plan', body: 'Set your hours and days open — the forecast plans around them. Service defaults live below.', advanceOn: 'click-anywhere' }]}
         />
       )}
       <div className="flex-1 flex overflow-hidden min-h-0">
