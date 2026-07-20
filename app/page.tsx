@@ -5,6 +5,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef, useLayoutEffe
 import { buildSectionPlan } from '../utils/assigner'; 
 import OnboardingFlow from '../components/OnboardingFlow';
 import { notifyTour, TourOverlay } from '../components/TourOverlay';
+import Copilot from '../components/Copilot';
 // Note: If Claude named the function something else, use that name here.
 // Note 2: If your project uses the '@/' alias, it would be '@/utils/assigner'.
 
@@ -8201,6 +8202,27 @@ export default function Home({ hostMode = false } = {}) {
   const onboardingTourActive = !hostMode && !!onboarding && onboarding.done !== true;
   const featureTourEligible = hydrated && !editMode && (hostMode || onboarding?.done === true);
   const tourMutex = onboardingTourActive ? 'onboarding' : featureTour ? 'feature' : null;
+  // Co-pilot is deliberately quiet whenever the app has already claimed
+  // the user's attention with a tour or modal.
+  const copilotSuppressed = !!tourMutex || modalOpen || walkInModalOpen || !!editReservation || !!editParty || !!confirmDelete || !!assignOverride || signOutConfirm || importOpen || migrateOpen;
+  const [copilotFloorEvent, setCopilotFloorEvent] = useState(0);
+  const copilotFloorSignature = useMemo(() => [
+    tables.map(t => `${t.id}:${t.status}:${t.party || ''}:${t.groupId || ''}`).join(','),
+    waitlist.map(p => `${p.id}:${p.size}`).join(','),
+    reservations.map(p => `${p.id}:${p.status || ''}:${p.tableId || ''}`).join(','),
+  ].join('|'), [reservations, tables, waitlist]);
+  const copilotFloorSignatureRef = useRef('');
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!copilotFloorSignatureRef.current) {
+      copilotFloorSignatureRef.current = copilotFloorSignature;
+      return;
+    }
+    if (copilotFloorSignatureRef.current !== copilotFloorSignature) {
+      copilotFloorSignatureRef.current = copilotFloorSignature;
+      setCopilotFloorEvent(value => value + 1);
+    }
+  }, [copilotFloorSignature, hydrated]);
 
   // Capture progress once per tour entry. TourOverlay consumes `complete`
   // flags generically, so actions performed while an earlier card is
@@ -10027,6 +10049,7 @@ export default function Home({ hostMode = false } = {}) {
         </div>
       )}
       <Header now={now} activeTab={activeTab} setActiveTab={setActiveTab} occupancy={occupancy} coversToday={serviceLog ? serviceLog.covers.total : null} onOpenService={() => setActiveTab('service')} hostMode={hostMode} onReplayTips={hostMode ? replayFeatureTour : null} onSignOut={hostMode ? () => setSignOutConfirm(true) : null} />
+      <Copilot suppressed={copilotSuppressed} floorEvent={copilotFloorEvent} />
       {featureTourEligible && tourMutex === 'feature' && featureTour && (
         <TourOverlay
           steps={activeFeatureTourSteps}

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRestaurantId } from "@/lib/tenant";
 import { RESEARCH_MODEL } from "@/lib/ai-models";
+import { putForecastCache } from "@/lib/forecast-cache";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
@@ -303,13 +304,15 @@ export async function POST(req: Request) {
     const baseline = prefs.baseline || null;
     const daysOpen = Array.isArray(prefs.daysOpen) && prefs.daysOpen.length === 7 ? prefs.daysOpen : null;
     if (daysOpen && !daysOpen[dow]) {
-      return Response.json({
+      const closedForecast = {
         date: target, dow, isToday: target === todayStr, generatedAt: new Date().toISOString(), historyDays: 0, research: false,
         closed: true, covers: { expected: 0, low: 0, high: 0, confidence: "high", method: "closed — owner schedule" },
         booked: { covers: 0, parties: 0, showRate: 0 }, walkIns: { expected: 0, historicalSharePct: 0 }, hourly: [], peak: { start: "", end: "", covers: 0 }, waitlistLikely: false,
         turn: { minutes: 0, source: "closed" }, lastTableOut: "", capacity: { seats: 0, tables: 0 }, sections: [], staffing: { crew: 0, crewMethod: "closed", coversPerServer: null, historicalCoversPerServer: null, verdict: "unknown", addServers: 0 },
         factors: { used: [{ key: "closed", label: "Closed", detail: "owner schedule", impactPct: 0 }], excluded: [] },
-      });
+      };
+      putForecastCache(restaurantId, target, closedForecast);
+      return Response.json(closedForecast);
     }
     const locName = (locPref.name || process.env.RESTAURANT_NAME || "").trim() || undefined;
     const locLat = String(locPref.lat || process.env.RESTAURANT_LAT || "").trim();
@@ -684,7 +687,7 @@ export async function POST(req: Request) {
       return { zone, tables: z.tables, seats: z.seats, expectedCovers: Math.round(expected * share * m), shareSrc, note };
     }).sort((a, b) => b.expectedCovers - a.expectedCovers);
 
-    return Response.json({
+    const forecast = {
       date: target, dow, isToday, generatedAt: new Date().toISOString(),
       historyDays, research: Object.keys(research).length > 0,
       covers: { expected, low: Math.round(expected * (1 - band)), high: Math.round(expected * (1 + band)), confidence, method: method || "reservation book + walk-in floor (no history)" },
@@ -697,7 +700,9 @@ export async function POST(req: Request) {
       sections,
       staffing: { crew, crewMethod, coversPerServer, historicalCoversPerServer: perServerHist > 0 ? Math.round(perServerHist) : null, verdict: staffingVerdict, addServers: staffingDelta },
       factors: { used: usedFactors, excluded: excludedFactors },
-    });
+    };
+    putForecastCache(restaurantId, target, forecast);
+    return Response.json(forecast);
   } catch (err) {
     console.error("[api/predict]", err);
     return Response.json({ error: "predict_failed" }, { status: 500 });
