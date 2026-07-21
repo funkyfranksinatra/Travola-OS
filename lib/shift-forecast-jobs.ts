@@ -1,14 +1,13 @@
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { RESEARCH_MODEL } from "@/lib/ai-models";
-import { putForecastCache } from "@/lib/forecast-cache";
-import { getShiftIntel, invalidateShiftIntel } from "@/lib/shift-intel";
+import { getStoredForecast, putForecastCache } from "@/lib/forecast-cache";
+import { canonicalShiftDate, getShiftIntel, invalidateShiftIntel, shiftDateOffset, shiftWeekday } from "@/lib/shift-intel";
 import { prisma } from "@/lib/prisma";
-import { dateKeyOfService, serviceDateOf } from "@/lib/db-mappers";
+import { serviceDateOf } from "@/lib/db-mappers";
 
 const DAY = 24 * 60 * 60 * 1000;
 const clamp = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
-const dateAt = (date: string, offset: number) => new Date(serviceDateOf(date).getTime() + offset * DAY).toISOString().slice(0, 10);
 const numberAt = (value: any, path: string[]) => path.reduce((current, key) => current?.[key], value);
 
 export async function activeRestaurantIds() {
@@ -37,7 +36,7 @@ function parseWeeklyResearch(text: string, dates: string[]) {
 
 /** One web-enabled research call per restaurant batch; all cover arithmetic stays deterministic. */
 export async function runWeeklyForecast(restaurantId: string, dates: string[], actualAnchor?: unknown) {
-  const uniqueDates = [...new Set(dates)].filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)).slice(0, 7);
+  const uniqueDates = [...new Set(dates.filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)).map((date) => canonicalShiftDate(date)))].slice(0, 7);
   if (!uniqueDates.length) return { dates: [], research: false, usage: null };
   const [restaurant, settings, dossiers] = await Promise.all([
     prisma.restaurant.findUnique({ where: { id: restaurantId }, select: { name: true } }),
@@ -92,11 +91,12 @@ function expectedSectionShares(payload: any): Map<string, number> {
 
 /** Deterministic post-close score. 0.30 is the corrective-run threshold. */
 export async function scoreForecastAccuracy(restaurantId: string, date: string) {
-  const existing = await prisma.forecastAccuracy.findUnique({ where: { restaurantId_date: { restaurantId, date } } });
+  const shiftDate = canonicalShiftDate(date);
+  const existing = await prisma.forecastAccuracy.findUnique({ where: { restaurantId_date: { restaurantId, date: shiftDate } } });
   if (existing) return { date, skipped: "already_scored", errorScore: existing.errorScore, triggeredRerun: existing.triggeredRerun };
-  const stored = await prisma.shiftForecast.findUnique({ where: { restaurantId_date: { restaurantId, date } } });
+  const stored = await getStoredForecast(restaurantId, shiftDate);
   if (!stored) return { date, skipped: "no_forecast" };
-  const serviceDate = serviceDateOf(date);
+  const serviceDate = serviceDateOf(shiftDate);
   const [shifts, rows] = await Promise.all([
     prisma.shift.findMany({ where: { restaurantId, serviceDate }, select: { actualCovers: true, totalReservations: true, totalWalkIns: true, avgTurnMinutes: true, isFinalized: true } }),
     prisma.reservation.findMany({ where: { restaurantId, serviceDate, status: { in: ["SEATED", "FINISHED"] } }, select: { status: true, partySize: true, source: true, turnMinutes: true, finishedTime: true, tables: { select: { table: { select: { area: true } } } } } }),
@@ -127,15 +127,15 @@ export async function scoreForecastAccuracy(restaurantId: string, date: string) 
   const errorScore = Number((0.45 * Math.min(1, coverError) + 0.2 * Math.min(1, splitError) + 0.15 * Math.min(1, turnError) + 0.1 * zoneError + 0.1 * Math.min(1, lastOutError)).toFixed(4));
   const actual = { covers: actualCovers, reservations: actualReservations, walkIns: actualWalkIns, averageTurnMinutes: actualTurn, lastTableOutMinutes: lastOuts.length ? Math.max(...lastOuts) : null, sections: Object.fromEntries(zoneActual) };
   try {
-    await prisma.forecastAccuracy.create({ data: { restaurantId, date, predicted: payload, actual, errorScore, triggeredRerun: false } });
+    await prisma.forecastAccuracy.create({ data: { restaurantId, date: shiftDate, predicted: payload, actual, errorScore, triggeredRerun: false } });
   } catch {
-    const row = await prisma.forecastAccuracy.findUnique({ where: { restaurantId_date: { restaurantId, date } } });
+    const row = await prisma.forecastAccuracy.findUnique({ where: { restaurantId_date: { restaurantId, date: shiftDate } } });
     return { date, skipped: "already_scored", errorScore: row?.errorScore, triggeredRerun: row?.triggeredRerun };
   }
   if (errorScore < 0.3) return { date, errorScore, triggeredRerun: false };
-  const lastSundayOffset = 7 - new Date(`${date}T12:00:00Z`).getUTCDay();
-  const remaining = Array.from({ length: Math.max(0, lastSundayOffset) }, (_, index) => dateAt(date, index + 1));
+  const lastSundayOffset = 7 - shiftWeekday(shiftDate);
+  const remaining = Array.from({ length: Math.max(0, lastSundayOffset) }, (_, index) => shiftDateOffset(shiftDate, index + 1));
   if (remaining.length) await runWeeklyForecast(restaurantId, remaining, { date, actual, errorScore });
-  await prisma.forecastAccuracy.update({ where: { restaurantId_date: { restaurantId, date } }, data: { triggeredRerun: remaining.length > 0 } });
-  return { date, errorScore, triggeredRerun: remaining.length > 0, reranDates: remaining };
+  await prisma.forecastAccuracy.update({ where: { restaurantId_date: { restaurantId, date: shiftDate } }, data: { triggeredRerun: remaining.length > 0 } });
+  return { date: shiftDate, errorScore, triggeredRerun: remaining.length > 0, reranDates: remaining };
 }

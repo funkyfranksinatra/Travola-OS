@@ -8434,6 +8434,7 @@ export default function Home({ hostMode = false } = {}) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   });
   const predictorKeyRef = useRef('');
+  const predictorRequestRef = useRef(0);
 
   // ─── AI Seating Agent state ───────────────────────────────────────
   const [aiSuggestedIds, setAiSuggestedIds] = useState([]);
@@ -8528,30 +8529,47 @@ export default function Home({ hostMode = false } = {}) {
 
   // ─── AI Predictor — fetch on tab open, 60s cache ─────────────────
   const fetchPredictions = async () => {
+    const requestId = ++predictorRequestRef.current;
+    const requestedDate = predictorDate;
     setPredictorLoading(true);
     setPredictorError(null);
     try {
       const res = await fetch('/api/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: predictorDate }),
+        body: JSON.stringify({ date: requestedDate }),
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
         throw new Error(errBody.error || `HTTP ${res.status}`);
       }
       const data = await res.json();
-      setPredictorData(data);
-      setPredictorFetchedAt(Date.now());
-      predictorKeyRef.current = predictorDate;
+      // A slow research response for the previously viewed day must never
+      // overwrite the newly selected day's forecast.
+      if (requestId === predictorRequestRef.current) {
+        setPredictorData(data);
+        setPredictorFetchedAt(Date.now());
+        predictorKeyRef.current = requestedDate;
+      }
       return data;
     } catch (e) {
-      setPredictorError(e instanceof Error ? e.message : 'Failed to fetch predictions');
+      if (requestId === predictorRequestRef.current) setPredictorError(e instanceof Error ? e.message : 'Failed to fetch predictions');
       return null;
     } finally {
-      setPredictorLoading(false);
+      if (requestId === predictorRequestRef.current) setPredictorLoading(false);
     }
   };
+
+  useEffect(() => {
+    // Do not leave yesterday/tomorrow's result on screen while the selected
+    // service date loads. That visual stale state was indistinguishable from
+    // a date-key mismatch and let the tab disagree with the co-pilot.
+    predictorRequestRef.current += 1;
+    setPredictorData(null);
+    setBriefingData(null);
+    setPredictorFetchedAt(null);
+    predictorKeyRef.current = '';
+  }, [predictorDate]);
 
   const fetchBriefing = async (regenerate = false) => {
     setBriefingLoading(true);

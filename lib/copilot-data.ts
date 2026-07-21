@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getForecastCache } from "@/lib/forecast-cache";
-import { getShiftIntel } from "@/lib/shift-intel";
+import { canonicalShiftDate, getShiftIntel } from "@/lib/shift-intel";
 import { dateKeyOfService, dayOfWeekOf, serviceDateOf, toTimeStr, todayKey } from "@/lib/db-mappers";
 
 const DINING_WINDOW_MINS = 90;
@@ -8,7 +8,7 @@ const DINING_WINDOW_MINS = 90;
 const minutes = (date: Date) => date.getHours() * 60 + date.getMinutes();
 const ageMinutes = (date: Date | null, now = Date.now()) => date ? Math.max(0, Math.round((now - date.getTime()) / 60000)) : null;
 const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
-const dateOrToday = (value?: string) => DATE_KEY.test(String(value || "")) ? String(value) : todayKey();
+const dateOrToday = (value?: string) => DATE_KEY.test(String(value || "")) ? canonicalShiftDate(String(value)) : canonicalShiftDate();
 const timeLabel = (minutes: number | null | undefined) => minutes == null ? "not set" : toTimeStr(new Date(2000, 0, 1, Math.floor(minutes / 60), minutes % 60));
 
 /**

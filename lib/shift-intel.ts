@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { dayOfWeekOf, dateKeyOfService, serviceDateOf, toTimeStr } from "@/lib/db-mappers";
+import { dateKeyOfService, serviceDateOf, toTimeStr } from "@/lib/db-mappers";
 import { getStoredForecast } from "@/lib/forecast-cache";
 
 type Baseline = {
@@ -14,6 +14,53 @@ const hourOf = (value: Date | null) => value ? value.getHours() : null;
 const minOf = (value: Date | null) => value ? value.getHours() * 60 + value.getMinutes() : null;
 const bounded = (value: number, low: number, high: number) => Math.max(low, Math.min(high, value));
 const keyFor = (restaurantId: string, date: string) => `${restaurantId}:${date}`;
+
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * The one calendar-date convention for shift intelligence.  Date strings are
+ * already restaurant-calendar keys, so never run them through Date.parse or
+ * toISOString (both can move a restaurant's service date across midnight).
+ * Date instances are formatted in the supplied restaurant timezone, or the
+ * caller's local calendar when no timezone is available.
+ */
+export function canonicalShiftDate(value?: string | Date | null, timeZone?: string): string {
+  if (typeof value === "string" && DATE_KEY.test(value)) return value;
+  const date = value instanceof Date && !Number.isNaN(value.getTime()) ? value : new Date();
+  if (timeZone) {
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
+      const part = (type: string) => parts.find((item) => item.type === type)?.value;
+      const year = part("year"), month = part("month"), day = part("day");
+      if (year && month && day) return `${year}-${month}-${day}`;
+    } catch {
+      // A bad user preference must never make a forecast unaddressable.
+    }
+  }
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/** Resolve the restaurant's configured IANA timezone before choosing a
+ * default service date. Explicit YYYY-MM-DD inputs stay literal. */
+export async function restaurantShiftDate(restaurantId: string, value?: string | Date | null): Promise<string> {
+  if (typeof value === "string" && DATE_KEY.test(value)) return canonicalShiftDate(value);
+  const settings = await prisma.restaurantSettings.findUnique({ where: { restaurantId }, select: { prefs: true } });
+  const timeZone = (settings?.prefs as any)?.location?.timeZone;
+  return canonicalShiftDate(value, typeof timeZone === "string" ? timeZone : undefined);
+}
+
+export function shiftDateOffset(date: string, days: number): string {
+  const base = serviceDateOf(canonicalShiftDate(date));
+  base.setUTCDate(base.getUTCDate() + days);
+  return `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, "0")}-${String(base.getUTCDate()).padStart(2, "0")}`;
+}
+
+export function shiftWeekday(date: string): number {
+  return serviceDateOf(canonicalShiftDate(date)).getUTCDay();
+}
 
 function monthInRange(month: number, from?: number, to?: number) {
   if (!Number.isInteger(from) || !Number.isInteger(to) || !from || !to) return false;
@@ -45,16 +92,17 @@ function numberAt(value: unknown, path: string[]) {
  * co-pilot / briefing reads without becoming a correctness dependency.
  */
 export async function getShiftIntel(restaurantId: string, date: string): Promise<Dossier> {
-  const cacheKey = keyFor(restaurantId, date);
+  const shiftDate = canonicalShiftDate(date);
+  const cacheKey = keyFor(restaurantId, shiftDate);
   const cached = aggregateCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
 
-  const serviceDate = serviceDateOf(date);
-  const weekday = dayOfWeekOf(date);
+  const serviceDate = serviceDateOf(shiftDate);
+  const weekday = shiftWeekday(shiftDate);
   const since = new Date(serviceDate.getTime() - 180 * 24 * 60 * 60 * 1000);
   const [settings, stored, book, history, tables, roster, servers, shifts] = await Promise.all([
     prisma.restaurantSettings.findUnique({ where: { restaurantId }, select: { openMinutes: true, closeMinutes: true, prefs: true } }),
-    getStoredForecast(restaurantId, date),
+    getStoredForecast(restaurantId, shiftDate),
     prisma.reservation.findMany({
       where: { restaurantId, serviceDate, status: { in: ["UPCOMING", "PARTIALLY_ARRIVED", "SEATED"] } },
       select: { partySize: true, targetTime: true, source: true },
@@ -82,7 +130,9 @@ export async function getShiftIntel(restaurantId: string, date: string): Promise
   const lastOuts: number[] = [];
   for (const row of history) {
     const key = dateKeyOfService(row.serviceDate);
-    const item = days.get(key) || { covers: 0, walkIns: 0, weekday: row.dayOfWeek };
+    // Legacy dayOfWeek values were written through multiple date paths. The
+    // calendar key is authoritative, so derive the sample weekday from it.
+    const item = days.get(key) || { covers: 0, walkIns: 0, weekday: shiftWeekday(key) };
     item.covers += row.partySize;
     if (row.source === "WALK_IN") item.walkIns += row.partySize;
     days.set(key, item);
@@ -101,7 +151,7 @@ export async function getShiftIntel(restaurantId: string, date: string): Promise
   const walkShare = serviceDays.length >= 4 ? bounded(observedWalkShare * 0.75 + (baselineWalkShare ?? observedWalkShare) * 0.25, 0, 0.95) : baselineWalkShare ?? observedWalkShare;
 
   const storedExpected = stored ? numberAt(stored.payload, ["covers", "expected"]) : null;
-  const seasonal = seasonalMultiplier(baseline, date);
+  const seasonal = seasonalMultiplier(baseline, shiftDate);
   const historicalBase = sameWeekday.length ? mean(sameWeekday.slice(-10)) : serviceDays.length ? mean(serviceDays.map((row) => row.covers).slice(-21)) : 0;
   const baselineBase = Number.isFinite(Number(baseline?.avgCovers)) ? Number(baseline?.avgCovers) : 0;
   const modeledBase = (historicalBase || baselineBase || bookedCovers) * seasonal;
@@ -135,8 +185,9 @@ export async function getShiftIntel(restaurantId: string, date: string): Promise
   const staffingCapacity = activeServers.length ? Math.round(expected / activeServers.length) : null;
   const lastTableOutMinutes = lastOuts.length ? Math.round(mean(lastOuts)) : null;
   const value: Dossier = {
-    date, closed,
-    expectedCovers: { value: expected, source: expectedSource, forecastSource: stored?.source ?? null, modeledFrom: expectedSource === "model" ? { sameWeekdayDays: sameWeekday.length, historyDays: serviceDays.length, seasonalMultiplier: seasonal, baselineCovers: baselineBase || null } : null },
+    date: shiftDate, closed,
+    expectedCovers: { value: expected, source: expectedSource, forecastSource: stored?.source ?? null, generatedAt: stored?.createdAt?.toISOString() ?? null, modeledFrom: expectedSource === "model" ? { sameWeekdayDays: sameWeekday.length, historyDays: serviceDays.length, seasonalMultiplier: seasonal, baselineCovers: baselineBase || null } : null },
+    forecast: stored ? { source: stored.source, generatedAt: stored.createdAt.toISOString(), payload: stored.payload } : null,
     reservationVsWalkIn: { bookedCovers, bookedParties: book.length, expectedWalkIns, walkInSharePct: Math.round(walkShare * 100), source: serviceDays.length >= 4 ? "observed history blended with baseline" : baselineWalkShare != null ? "owner baseline" : "observed history" },
     sections, hourly,
     turns: { observedMinutes: observedTurn, defaultMinutes: defaultTurn, effectiveMinutes: observedTurn || defaultTurn, sampleCount: turns.length },

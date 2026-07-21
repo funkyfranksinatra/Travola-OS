@@ -4,7 +4,7 @@ import { BRIEFING_MODEL, BRIEFING_WORKER_MODEL } from "@/lib/ai-models";
 import { requireRestaurantId } from "@/lib/tenant";
 import { getBriefingSnapshot } from "@/lib/briefing-data";
 import { clearBriefingCache, getBriefingCache, putBriefingCache } from "@/lib/briefing-cache";
-import { todayKey } from "@/lib/db-mappers";
+import { restaurantShiftDate } from "@/lib/shift-intel";
 
 export const maxDuration = 180;
 
@@ -97,7 +97,7 @@ export async function POST(req: Request) {
   if ("response" in auth) return auth.response;
   if (!process.env.OPENAI_API_KEY) return Response.json({ error: "briefing_unavailable" }, { status: 503 });
   const body = await req.json().catch(() => ({}));
-  const date = typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : todayKey();
+  const date = await restaurantShiftDate(auth.restaurantId, typeof body.date === "string" ? body.date : undefined);
   const regenerate = body.regenerate === true;
   const startedAt = Date.now();
   if (regenerate) await clearBriefingCache(auth.restaurantId, date);

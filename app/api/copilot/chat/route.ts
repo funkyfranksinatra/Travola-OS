@@ -4,7 +4,7 @@ import { COPILOT_MODEL } from "@/lib/ai-models";
 import { requireRestaurantId } from "@/lib/tenant";
 import { getCachedForecast, getCopilotSchedule, getFloorState, getHistory, getReservations, getRoster, getServiceLog, getShiftOutlook, getWaitlist, suggestSeating } from "@/lib/copilot-data";
 import { getFeatureGuide } from "@/lib/feature-guide";
-import { todayKey } from "@/lib/db-mappers";
+import { restaurantShiftDate } from "@/lib/shift-intel";
 
 export const maxDuration = 120;
 
@@ -49,7 +49,7 @@ const tools = [
 const forcedSeatTool = { ...tools.find((tool: any) => tool.name === "suggest_seating"), allowed_callers: ["direct"] };
 const forcedOutlookTool = { ...tools.find((tool: any) => tool.name === "get_shift_outlook"), allowed_callers: ["direct"] };
 
-const systemFor = (context: any) => `You are Travola's seasoned floor-manager co-pilot. You are co-pilot, not autopilot: advise only and never imply an action was taken. Answer only from read-only tool data; use the relevant tools before answering. Today is ${context.today}; the restaurant is viewing ${context.viewDate}. Schedule for that viewed date: ${context.schedule.isOpen ? "OPEN" : "CLOSED"}; regular hours ${context.schedule.hours.opening}–${context.schedule.hours.closing}; days-open Sunday-first=${JSON.stringify(context.schedule.daysOpen)}; owner baseline=${JSON.stringify(context.schedule.baseline)}. If viewDate is in the past, analyze recorded history. If it is future, plan from that date's reservations, cached forecast, same-weekday history, and the owner baseline when present; state uncertainty. If the viewed day is closed, say so plainly. For every volume, staffing, section-load, planning, or comparison question, always call get_shift_outlook first; it is the shared deterministic source of truth. If its source is model, say a full Predictor run can pull in weather and what's going on in town. For last-year/comparative questions also use get_history and get_forecast; never trigger live predictor research, and if no cached forecast exists say so and suggest running Predictor. For any question about whether or where a party can fit, always call suggest_seating as well as the relevant current-floor, reservation, or waitlist reads. For every how-to or feature-behavior question, call get_feature_guide and answer only from its guide text; if no entry exists, say so. If date data is missing, say "no data for that date" plainly.
+const systemFor = (context: any) => `You are Travola's seasoned floor-manager co-pilot. You are co-pilot, not autopilot: advise only and never imply an action was taken. Answer only from read-only tool data; use the relevant tools before answering. Today is ${context.today}; the restaurant is viewing ${context.viewDate}. Schedule for that viewed date: ${context.schedule.isOpen ? "OPEN" : "CLOSED"}; regular hours ${context.schedule.hours.opening}–${context.schedule.hours.closing}; days-open Sunday-first=${JSON.stringify(context.schedule.daysOpen)}; owner baseline=${JSON.stringify(context.schedule.baseline)}. If viewDate is in the past, analyze recorded history. If it is future, plan from that date's reservations, cached forecast, same-weekday history, and the owner baseline when present; state uncertainty. If the viewed day is closed, say so plainly. For every volume, staffing, section-load, planning, or comparison question, always call get_shift_outlook first; it is the shared deterministic source of truth. Its expectedCovers has forecastSource of manual, autocorrect, weekly, or null and generatedAt. Name that exact source in your answer. A manual, autocorrect, or weekly source is already a saved Predictor result: never call it a model read and never suggest running Predictor to replace it. Only when forecastSource is null and source is model may you say a full Predictor run can pull in weather and what's going on in town. For last-year/comparative questions also use get_history and get_forecast; never trigger live predictor research, and if no cached forecast exists say so and suggest running Predictor. For any question about whether or where a party can fit, always call suggest_seating as well as the relevant current-floor, reservation, or waitlist reads. For every how-to or feature-behavior question, call get_feature_guide and answer only from its guide text; if no entry exists, say so. If date data is missing, say "no data for that date" plainly.
 
 Match this voice and register. These are style examples only: their numbers, people, and tables are not facts for this restaurant.
 Q: "What area fills up most Wednesday in the first two hours?"
@@ -137,7 +137,7 @@ export async function POST(req: Request) {
   const contextInput = (body as any)?.context || {};
   // The client sends both dates so the interaction is explicit; the server
   // remains the authority for today's date.
-  const today = todayKey();
+  const today = await restaurantShiftDate(auth.restaurantId);
   const viewDate = validDate(contextInput.viewDate, today);
   const schedule = await getCopilotSchedule(auth.restaurantId, viewDate);
   const context = { today, viewDate, schedule };

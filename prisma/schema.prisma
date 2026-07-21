@@ -459,7 +459,10 @@ model ShiftForecast {
   payload      Json
   createdAt    DateTime   @default(now())
 
-  @@unique([restaurantId, date])
+  // Forecasts are append-only revisions. Readers choose the strongest
+  // source for a service date (manual > autocorrect > weekly), then newest.
+  // Keeping revisions means a weekly job can never erase a manual run.
+  @@index([restaurantId, date, source, createdAt])
   @@index([restaurantId, createdAt])
 }
 

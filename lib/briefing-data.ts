@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { getForecastCache } from "@/lib/forecast-cache";
 import { getShiftIntel } from "@/lib/shift-intel";
-import { serviceDateOf, toTimeStr } from "@/lib/db-mappers";
+import { dateKeyOfService, serviceDateOf, toTimeStr } from "@/lib/db-mappers";
 
 export async function getBriefingSnapshot(restaurantId: string, date: string, suppliedForecast?: unknown) {
   const serviceDate = serviceDateOf(date);
@@ -49,7 +49,7 @@ export async function getBriefingSnapshot(restaurantId: string, date: string, su
   const days = new Map<string, number>();
   const turns = history.map((row) => row.turnMinutes).filter((value): value is number => value != null);
   for (const row of history) {
-    const key = row.serviceDate.toISOString().slice(0, 10);
+    const key = dateKeyOfService(row.serviceDate);
     days.set(key, (days.get(key) || 0) + row.partySize);
   }
   const completedDayCovers = [...days.values()];
