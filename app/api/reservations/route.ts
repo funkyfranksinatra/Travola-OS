@@ -15,6 +15,7 @@ import { requireRestaurantId } from "@/lib/tenant";
 import {
   buildTargetTime,
   dayOfWeekOf,
+  parseResMinutes,
   reservationToApp,
   serviceDateOf,
   tableIdToDbIds,
@@ -65,6 +66,9 @@ export async function POST(req: Request) {
     // seated right now by definition).
     if (!seatedNow && date < todayKey()) {
       return Response.json({ error: "past_date" }, { status: 400 });
+    }
+    if (!seatedNow && parseResMinutes(body.time) == null) {
+      return Response.json({ error: "invalid_time" }, { status: 400 });
     }
     const targetTime = seatedNow ? new Date() : buildTargetTime(date, body.time);
     const dbIds = tableIdToDbIds(body.tableId);
@@ -129,6 +133,9 @@ export async function PATCH(req: Request) {
     if (body.date !== undefined || body.time !== undefined) {
       const date: string = body.date || dateKeyOfService(existing.serviceDate);
       const time: string = body.time || toTimeStr(existing.targetTime);
+      if (parseResMinutes(time) == null) {
+        return Response.json({ ok: false, reason: "invalid_time" }, { status: 400 });
+      }
       data.targetTime = buildTargetTime(date, time);
       data.serviceDate = serviceDateOf(date);
       data.dayOfWeek = dayOfWeekOf(date);
