@@ -3571,6 +3571,7 @@ function parseResMinutes(s) {
   if (!m) return null;
   let h = parseInt(m[1], 10);
   const mn = m[2] ? parseInt(m[2], 10) : 0;
+  if (h < 1 || h > 12 || mn < 0 || mn > 59) return null;
   if (h === 12) h = 0;
   if (m[3].toLowerCase() === 'p') h += 12;
   return h * 60 + mn;
@@ -6555,8 +6556,18 @@ function ReservationModal({ onClose, onSubmit, initialDate, initialReservation =
   );
   const [vip, setVip] = useState(initialReservation ? !!initialReservation.vip : false);
 
+  const normalizeTimePart = (value, min, max, fallback) => {
+    const digits = String(value ?? '').replace(/\D/g, '');
+    if (!digits) return String(fallback);
+    return String(Math.min(max, Math.max(min, Number.parseInt(digits, 10))));
+  };
+
   const submit = (skipAssign = false) => {
-    const formattedTime = `${hour}:${minute.padStart(2, '0')}${ampm.toLowerCase()}`;
+    // Submit the same bounded values the steppers display. This covers a
+    // click on Leave Unassigned before a text field has blurred.
+    const normalizedHour = normalizeTimePart(hour, 1, 12, 12);
+    const normalizedMinute = normalizeTimePart(minute, 0, 59, 0);
+    const formattedTime = `${normalizedHour}:${normalizedMinute.padStart(2, '0')}${ampm.toLowerCase()}`;
     // tableId is omitted either way — the booking is always created
     // unassigned. skipAssign only tells Home whether to hand off to
     // point-and-click table selection afterwards, or to drop the guest
@@ -6612,8 +6623,8 @@ function ReservationModal({ onClose, onSubmit, initialDate, initialReservation =
             ariaLabel="Hour"
             onUp={() => setHour(h => String(((parseInt(h, 10) || 0) % 12) + 1))}
             onDown={() => setHour(h => { const n = (parseInt(h, 10) || 0) - 1; return String(n < 1 ? 12 : n); })}
-            onChange={e => setHour(e.target.value.replace(/\D/g, '').slice(0, 2))}
-            onBlur={() => setHour(h => { const n = parseInt(h, 10); return String(isNaN(n) ? 12 : Math.min(12, Math.max(1, n))); })}
+            onChange={e => setHour(h => normalizeTimePart(e.target.value, 1, 12, h || 12))}
+            onBlur={() => setHour(h => normalizeTimePart(h, 1, 12, 12))}
           />
           <span className="text-2xl font-bold text-gray-500 select-none">:</span>
           <TimeStepper
@@ -6621,8 +6632,8 @@ function ReservationModal({ onClose, onSubmit, initialDate, initialReservation =
             ariaLabel="Minute"
             onUp={() => setMinute(m => String(((Math.floor((parseInt(m, 10) || 0) / 5) + 1) * 5) % 60).padStart(2, '0'))}
             onDown={() => setMinute(m => String(((Math.ceil((parseInt(m, 10) || 0) / 5) - 1) * 5 + 60) % 60).padStart(2, '0'))}
-            onChange={e => setMinute(e.target.value.replace(/\D/g, '').slice(0, 2))}
-            onBlur={() => setMinute(m => { const n = parseInt(m, 10); return String(isNaN(n) ? 0 : Math.min(59, Math.max(0, n))).padStart(2, '0'); })}
+            onChange={e => setMinute(m => normalizeTimePart(e.target.value, 0, 59, m || 0))}
+            onBlur={() => setMinute(m => normalizeTimePart(m, 0, 59, 0).padStart(2, '0'))}
           />
           <button
             type="button"

@@ -15,9 +15,15 @@ export function parseResMinutes(s: string | null | undefined): number | null {
   if (!s) return null;
   const m = /^(\d{1,2}):(\d{2})\s*(a|p)m?$/i.exec(String(s).trim());
   if (!m) return null;
-  let h = parseInt(m[1], 10) % 12;
+  const h12 = parseInt(m[1], 10);
+  const minutes = parseInt(m[2], 10);
+  // Never normalize a malformed booking into a different valid time.
+  // In particular, `80:30pm` used to become 8:30pm via `% 12`, which
+  // left the malformed value invisible in timeline-based planning views.
+  if (h12 < 1 || h12 > 12 || minutes < 0 || minutes > 59) return null;
+  let h = h12 % 12;
   if (m[3].toLowerCase() === "p") h += 12;
-  return h * 60 + parseInt(m[2], 10);
+  return h * 60 + minutes;
 }
 
 /** Local Date for a booking slot: "YYYY-MM-DD" + "7:30pm" → Date. */
