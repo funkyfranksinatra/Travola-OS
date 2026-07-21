@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRestaurantId } from "@/lib/tenant";
 import { RESEARCH_MODEL } from "@/lib/ai-models";
-import { putForecastCache } from "@/lib/forecast-cache";
+import { getStoredForecast, putForecastCache } from "@/lib/forecast-cache";
 import { canonicalShiftDate, getShiftIntel, invalidateShiftIntel, shiftDateOffset, shiftWeekday } from "@/lib/shift-intel";
 import { dateKeyOfService, serviceDateOf } from "@/lib/db-mappers";
 import { generateText } from "ai";
@@ -317,6 +317,20 @@ export async function POST(req: Request) {
       invalidateShiftIntel(restaurantId, target);
       const dossier = await getShiftIntel(restaurantId, target) as any;
       return Response.json({ ...(dossier.forecast?.payload || closedForecast), shiftIntel: { source: dossier.expectedCovers?.forecastSource || "model", generatedAt: dossier.expectedCovers?.generatedAt || null } });
+    }
+    // Opening a stored shift must be a read, not a fresh research job.  The
+    // durable cache already applies manual > autocorrect > weekly precedence.
+    // Only an explicit Refresh is allowed to replace that forecast.
+    if (body?.regenerate !== true) {
+      const stored = await getStoredForecast(restaurantId, target);
+      if (stored) {
+        const dossier = await getShiftIntel(restaurantId, target) as any;
+        return Response.json({
+          ...(stored.payload as object),
+          cached: true,
+          shiftIntel: { source: dossier.expectedCovers?.forecastSource || stored.source, generatedAt: dossier.expectedCovers?.generatedAt || stored.createdAt.toISOString() },
+        });
+      }
     }
     const locName = (locPref.name || process.env.RESTAURANT_NAME || "").trim() || undefined;
     const locLat = String(locPref.lat || process.env.RESTAURANT_LAT || "").trim();
