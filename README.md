@@ -1,19 +1,62 @@
 # Travola
 
-Travola is a restaurant operations console for reservations, floor plans, service, waitlists, staffing, and deterministic volume forecasting. The manager view lives at `/`; the host view is `/host`.
+Travola is AI-native table management for independent restaurants: a manager floor console and host PWA, deterministic shift forecasting informed by live web research, an advisory co-pilot, pre-shift briefings, a self-correcting forecast watchdog, and fully isolated multi-restaurant accounts.
 
-## Run locally
+## For judges — try it in 5 minutes
 
-Requirements: Node.js 20+, an accessible Neon Postgres database, and the environment variables below. Copy `.env.example` if present, or create `.env.local`.
+There is no shared demo account because the product experience is creating your own restaurant and being guided through it.
 
-```bash
-npm install
-npm run dev
-```
+1. Open [Travola in production](https://travola-os-tablai.vercel.app).
+2. Choose **Create restaurant**, enter any restaurant name and a four-digit passcode, then follow the guided setup.
+3. To try the migration path, use [sample-floorplan.png](demo-assets/sample-floorplan.png). It recreates the matching starter layout.
+4. When setup offers history import, use [sample-history.csv](demo-assets/sample-history.csv). It matches tables 1–13, is closed Mondays, runs Fri/Sat-heavy volume, and has roughly 92-minute turns.
+5. Run the Predictor for tomorrow, generate **Tonight’s Game Plan**, then open the bottom-right **Co-pilot** and ask about the week.
+6. Visit [`/host`](https://travola-os-tablai.vercel.app/host) to see the dedicated host-stand surface.
 
-Open [http://localhost:3000](http://localhost:3000). The app uses a restaurant-name plus four-digit-passcode login. Use the registered restaurant’s credentials, then create a new restaurant from the manager login if needed.
+## GPT-5.6 usage
 
-Required environment variables:
+| Capability | Where it runs | Model / implementation |
+| --- | --- | --- |
+| Programmatic tool calling | Co-pilot chat uses read-only, tenant-scoped tools for the floor, book, waitlist, roster, history, forecast, deterministic seating suggestion, and in-app help. | `COPILOT_MODEL`: `gpt-5.6-terra` via the official OpenAI Responses API |
+| Proactive floor alerts | A bounded sentry checks compact current-floor state after meaningful events. It is cooldown-limited, deduplicated, hidden during tours/dialogs, and never changes service data. | `COPILOT_SENTRY_MODEL`: `gpt-5.6-luna` |
+| Multi-agent briefing | **Tonight’s Game Plan** runs parallel demand, reservation-book, and staffing workstreams, then synthesizes a structured huddle briefing. Failed workstreams degrade gracefully. | `BRIEFING_WORKER_MODEL`: `gpt-5.6-luna`; `BRIEFING_MODEL`: `gpt-5.6-terra` |
+| Live research forecasting | The Predictor researches weather, holidays, and local events. Deterministic math, history, bounds, and factors decide the final forecast. | `RESEARCH_MODEL`: `gpt-5.6-terra` |
+| AI seating advice | The seater proposes fair, low-conflict placements, including merge suggestions; a human always approves the action. | `SEAT_MODEL`: `gpt-5.6-terra` |
+| Vision floor-plan migration | A floor-plan photo or screenshot is interpreted into tables, shapes, capacities, and positions before the user reviews it in the editor. | `IMPORT_MODEL`: `gpt-5.6` |
+| History import | CSV, spreadsheet, PDF, and handwritten-book inputs use deterministic parsing first, with AI extraction/mapping where needed. | `IMPORT_MODEL`: `gpt-5.6` |
+
+All model names are centralized in [`lib/ai-models.ts`](lib/ai-models.ts). AI is advisory: parsing, floor geometry, seating constraints, and forecast math remain deterministic and inspectable.
+
+## Codex collaboration
+
+Travola was built in a Codex desktop thread. Each feature arrived as an engineering directive, was implemented in-window, locally gated, merged, and production-smoked before the next round. Codex accelerated tenancy isolation, the additive/enforce Prisma rollout, session authentication, onboarding and tours, the GPT-5.6 tool layer, Shift Intelligence, and the final reliability passes. The collaboration’s governing decision stayed constant: the model can advise a restaurant team, never silently operate the restaurant for them.
+
+## Prior work vs. submission-window work
+
+| Date | Window | Contribution | Attribution | Commit |
+| --- | --- | --- | --- | --- |
+| 2026-07-18 | Prior work | Single-restaurant floor manager, host surface, deterministic seater, early predictor, and import foundation | Manual | Pre-window foundation |
+| 2026-07-18 | Prior work | Travola rebrand and brand assets | Manual | `a5a8edf`, `e8835cb` |
+| 2026-07-18 | Submission window | Runtime model migration across seating, import, vision, and prediction | Other AI tooling | `f70de8a` |
+| 2026-07-18 | Submission window | Multi-restaurant tenancy and passcode login | Codex thread | `776ff95` |
+| 2026-07-19 | Submission window | Guided onboarding, baseline setup, manager/host tours, and sign-out loop | Codex thread | `dd4fa5d`, `7fbc7de` |
+| 2026-07-19–21 | Submission window | Tour reliability, tenant integrity, predictor persistence, and production hardening | Codex thread | `b887667`, `bd4aaf4` |
+| 2026-07-20–21 | Submission window | GPT-5.6 co-pilot and Luna sentry | Codex thread | `cb40c2a`, `bb264da` |
+| 2026-07-20–21 | Submission window | Tonight’s Game Plan, durable briefing cache, Shift Intelligence, weekly forecast cron, and accuracy watchdog | Codex thread | `f9629e9`, `29f47a4`, `409a70c` |
+
+## Architecture
+
+**Runtime.** Next.js 16 and React 19 render a shared manager/host client surface. Prisma 7 uses its Postgres driver adapter against Neon; Vercel hosts the app and schedules the weekly forecast and nightly accuracy watchdog.
+
+**Tenant boundary.** An httpOnly, HMAC-signed session cookie contains the restaurant context. Every API route derives that identity on the server and scopes every read and write; clients never submit a restaurant ID as authority.
+
+**Shift Intelligence.** `lib/shift-intel.ts` builds one deterministic, tenant-scoped dossier for a restaurant/date: expected covers, booked vs. walk-in split, historical section/hours, turns, staffing capacity, and closed-day status. Predictor, co-pilot, briefing, and sentry consume that same data rather than passing model output between models.
+
+**Read-only AI layer.** Co-pilot tools can inspect operational data and run the existing deterministic seating suggestion, but cannot mutate reservations, tables, staff, or settings. Forecast priors are bounded and visible in factors while history is thin; the watchdog compares forecast and actuals with deterministic scoring.
+
+## Local development
+
+Requirements: Node.js 20+, access to a Neon Postgres database, and the following environment variables. Put them in `.env.local`; never commit secrets.
 
 ```bash
 DATABASE_URL="postgresql://..."
@@ -22,50 +65,19 @@ OPENAI_API_KEY="..."
 CRON_SECRET="a-separate-long-random-secret"
 ```
 
-`SESSION_SECRET` must be set for local development and for both Production and Preview in Vercel. Never reuse a development secret in production.
-`CRON_SECRET` authorizes the production weekly forecast and nightly accuracy-watchdog cron routes; set it in Vercel Production before enabling those schedules.
-
-Useful checks:
+Install and run:
 
 ```bash
+npm install
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000). On Windows, stop the dev server before Prisma commands so its engine DLL is not locked.
+
+```bash
+npx prisma db push
 node node_modules/typescript/bin/tsc --noEmit
 npm run build
 ```
 
-On Windows, stop the dev server before running Prisma generate or migrations so the engine DLL is not locked. Production schema changes use Prisma migrations; the tenancy migration sequence is additive backfill first, then enforcement in the same code deployment that writes the new required fields.
-
-## Architecture notes
-
-- Tenant context is held only in an httpOnly, HMAC-signed session cookie. API routes derive the restaurant ID from that cookie and scope every read and write.
-- The AI is advisory. Geometry, parsing, assignment constraints, and forecast math remain deterministic.
-- `app/page.tsx` deliberately remains the application’s large client component. Tours use small anchors and notify calls instead of a page-wide refactor.
-- Forecast setup priors are bounded, deterministic inputs and are reported in forecast factors only while history is thin.
-- Shift Intelligence is a deterministic, tenant-scoped dossier shared by Predictor, co-pilot, briefing, and sentry. Its weekly research factor is bounded before it can affect per-day forecast math; the nightly watchdog is math-only.
-
-## Built with Codex + GPT-5.6
-
-This submission was built collaboratively in a Codex thread using GPT-5.6. Codex accelerated the tenancy audit, safe additive/enforce migration workflow, session-based API scoping, deterministic forecast-prior integration, and the reusable onboarding/tour layer. The collaboration kept the project’s core decision intact: AI can advise, but it does not replace deterministic restaurant operations logic.
-
-Key decisions made during the collaboration:
-
-- Per-restaurant isolation is enforced at the server boundary, never trusted from client input.
-- Restaurant setup is resumable, skippable, and persisted in settings so a front-desk device cannot be trapped in a walkthrough.
-- Tour demo state is tenant-scoped and cleaned at completion, skip, and next load to avoid polluting operational records.
-- Existing Volario’s data was preserved through the tenancy rollout and excluded from new onboarding/tour prompts.
-- The GPT-5.6 co-pilot uses the official Responses API with Programmatic Tool Calling and only tenant-scoped read tools; GPT-5.6 Luna powers bounded, deduplicated proactive floor alerts. Party-fit turns are server-enforced to use the deterministic read-only seating check.
-- Tonight's Game Plan uses the official Responses multi-agent beta: three bounded Luna workstreams (demand, reservation book, staffing) run in parallel, then Terra synthesizes a structured, cacheable pre-shift briefing. The briefing never mutates the floor or invents missing history.
-
-### Work record
-
-| Date | Window | Contribution | Attribution | Commit |
-| --- | --- | --- | --- | --- |
-| 2026-07-18 | Prior work | Travola rebrand and brand assets | Manual | `a5a8edf`, `e8835cb` |
-| 2026-07-18 | Prior work | GPT-5.6 model migration | Other AI tooling | `f70de8a` |
-| 2026-07-18 | Submission window | Multi-restaurant tenancy and passcode login | Codex thread | `776ff95` |
-| 2026-07-19 | Submission window | Guided restaurant onboarding and baseline setup | Codex thread | `dd4fa5d` |
-| 2026-07-19 | Submission window | First-visit manager and host feature tours | Codex thread | `7fbc7de` |
-| 2026-07-19 | Submission window | README and retained Demo Bistro fixture | Codex thread | `docs: hackathon submission README` |
-
-## Deployment
-
-Pushes to `main` deploy to Vercel. Preview deployments are protected by Vercel Authentication; test them in an authenticated browser session. Before production verification, confirm the target deployment is READY and that `SESSION_SECRET` is present in the Production environment.
+`SESSION_SECRET` is required locally and in Vercel Production/Preview. `CRON_SECRET` authorizes the weekly forecast and nightly accuracy-watchdog routes. Pushes to `main` deploy to Vercel; authenticated browser sessions can access protected previews.
