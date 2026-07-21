@@ -8,7 +8,7 @@ type Baseline = {
 };
 type Dossier = Record<string, unknown>;
 const CACHE_MS = 5 * 60 * 1000;
-const aggregateCache = new Map<string, { expiresAt: number; value: Dossier }>();
+const aggregateCache = new Map<string, { expiresAt: number; value: Dossier; staffVersion: string }>();
 const mean = (values: number[]) => values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 const hourOf = (value: Date | null) => value ? value.getHours() : null;
 const minOf = (value: Date | null) => value ? value.getHours() * 60 + value.getMinutes() : null;
@@ -94,13 +94,21 @@ function numberAt(value: unknown, path: string[]) {
 export async function getShiftIntel(restaurantId: string, date: string): Promise<Dossier> {
   const shiftDate = canonicalShiftDate(date);
   const cacheKey = keyFor(restaurantId, shiftDate);
+  // Section plans change independently of a serverless instance. Read the
+  // tiny day-staff version before trusting this process's aggregate cache so
+  // chat can never answer from a previous section map after a save.
+  const roster = await prisma.serviceDayStaff.findUnique({
+    where: { restaurantId_serviceDate: { restaurantId, serviceDate: serviceDateOf(shiftDate) } },
+    select: { roster: true, sections: true, updatedAt: true },
+  });
+  const staffVersion = roster?.updatedAt.toISOString() || "none";
   const cached = aggregateCache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  if (cached && cached.expiresAt > Date.now() && cached.staffVersion === staffVersion) return cached.value;
 
   const serviceDate = serviceDateOf(shiftDate);
   const weekday = shiftWeekday(shiftDate);
   const since = new Date(serviceDate.getTime() - 180 * 24 * 60 * 60 * 1000);
-  const [settings, stored, book, history, tables, roster, servers, shifts] = await Promise.all([
+  const [settings, stored, book, history, tables, servers, shifts] = await Promise.all([
     prisma.restaurantSettings.findUnique({ where: { restaurantId }, select: { openMinutes: true, closeMinutes: true, prefs: true } }),
     getStoredForecast(restaurantId, shiftDate),
     prisma.reservation.findMany({
@@ -112,7 +120,6 @@ export async function getShiftIntel(restaurantId: string, date: string): Promise
       select: { serviceDate: true, dayOfWeek: true, partySize: true, source: true, targetTime: true, seatedTime: true, finishedTime: true, turnMinutes: true, tables: { select: { table: { select: { area: true } } } } },
     }),
     prisma.table.findMany({ where: { restaurantId, active: true }, select: { id: true, area: true, capacity: true } }),
-    prisma.serviceDayStaff.findUnique({ where: { restaurantId_serviceDate: { restaurantId, serviceDate } }, select: { roster: true, sections: true } }),
     prisma.server.findMany({ where: { restaurantId, active: true }, select: { id: true, name: true, onShift: true, roles: true } }),
     prisma.shift.findMany({ where: { restaurantId, serviceDate }, select: { servers: { select: { serverId: true, coversServed: true } } } }),
   ]);
@@ -237,7 +244,7 @@ export async function getShiftIntel(restaurantId: string, date: string): Promise
     staffing: { rosteredServers: activeServers.length, expectedCoversPerServer: staffingCapacity, recordedCoversToday: served || 0, assignmentBasis, unassignedExpectedCovers: Math.round(unassignedExpectedCovers), perServer },
     history: { serviceDays: serviceDays.length, sameWeekdayDays: sameWeekday.length },
   };
-  aggregateCache.set(cacheKey, { value, expiresAt: Date.now() + CACHE_MS });
+  aggregateCache.set(cacheKey, { value, staffVersion, expiresAt: Date.now() + CACHE_MS });
   return value;
 }
 
