@@ -35,6 +35,11 @@ const tools = [
   }),
 ];
 
+// The program runtime owns the ordinary read-tools. This one narrowly
+// scoped definition is used only for the server-enforced fallback below:
+// it guarantees a party-fit answer has an actual deterministic seat check.
+const forcedSeatTool = { ...tools.find((tool: any) => tool.name === "suggest_seating"), allowed_callers: ["direct"] };
+
 const system = `You are Travola's concise floor-manager co-pilot. You are co-pilot, not autopilot: advise only and never imply an action was taken. Use numbers before prose. Answer only from read-only tool data; use the relevant tools before answering. For any question about whether or where a party can fit, always call suggest_seating as well as the relevant current-floor, reservation, or waitlist reads. If the data is missing, stale, or insufficient, say that plainly. Keep answers practical and short. Never invent a table, party, server, forecast, or booking.`;
 
 const cleanMessages = (body: unknown) => Array.isArray((body as { messages?: unknown[] })?.messages)
@@ -44,6 +49,14 @@ const cleanMessages = (body: unknown) => Array.isArray((body as { messages?: unk
     const content = typeof message.content === "string" ? message.content.trim().slice(0, 3000) : "";
     return role && content ? [{ role, content }] : [];
   }) : [];
+
+function fitIntentPartySize(text: string) {
+  const asksFit = /\b(fit|seat|seating|walk[ -]?in|party)\b/i.test(text);
+  if (!asksFit) return { asksFit: false, partySize: null };
+  const match = text.match(/\b(?:party\s*(?:of|for)?\s*|for\s+|of\s+)?(\d{1,2})(?:\s*(?:people|persons|guests?|top))?\b/i);
+  const partySize = match ? Number(match[1]) : null;
+  return { asksFit: true, partySize: partySize && partySize >= 1 && partySize <= 30 ? partySize : null };
+}
 
 function usageOf(response: any) {
   const usage = response?.usage || {};
@@ -73,6 +86,14 @@ export async function POST(req: Request) {
   if (!process.env.OPENAI_API_KEY) return Response.json({ error: "copilot_unavailable" }, { status: 503 });
   const messages = cleanMessages(await req.json().catch(() => ({})));
   if (!messages.length || messages[messages.length - 1].role !== "user") return Response.json({ error: "message_required" }, { status: 400 });
+  const fitIntent = fitIntentPartySize(messages[messages.length - 1].content);
+  if (fitIntent.asksFit && !fitIntent.partySize) {
+    return Response.json({
+      answer: "What party size should I check? I won't guess a seating recommendation.",
+      tools: [],
+      metrics: { latencyMs: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedUsd: 0, programmaticToolCalls: 0, model: COPILOT_MODEL },
+    });
+  }
 
   const startedAt = Date.now();
   const allUsage = { inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedUsd: 0 };
@@ -87,11 +108,35 @@ export async function POST(req: Request) {
 
     const calls = (response.output || []).filter((item: any) => item.type === "function_call");
     const programmaticToolCalls = calls.filter((call: any) => call.caller?.type === "program").length;
+    const outputs: Array<{ tool: string; data: unknown }> = [];
     if (calls.length) {
-      const outputs = await Promise.all(calls.slice(0, MAX_TOOL_ROUNDS).map(async (call: any) => {
+      outputs.push(...await Promise.all(calls.slice(0, MAX_TOOL_ROUNDS).map(async (call: any) => {
         calledTools.push(call.name);
         return { tool: call.name, data: await runTool(auth.restaurantId, call) };
-      }));
+      })));
+    }
+    // Prompt guidance is advisory; party-fit advice is not. If the
+    // program omitted the deterministic seating check, require it in a
+    // second, isolated read-only round before final synthesis.
+    if (fitIntent.partySize && !calledTools.includes("suggest_seating")) {
+      const forced = await client.responses.create({
+        model: COPILOT_MODEL,
+        instructions: "Call suggest_seating for exactly the requested party size. Do not answer prose.",
+        input: messages[messages.length - 1].content,
+        tools: [forcedSeatTool],
+        tool_choice: { type: "function", name: "suggest_seating" },
+        store: false,
+        reasoning: { effort: "low", context: "current_turn" },
+      });
+      usage = usageOf(forced);
+      Object.keys(allUsage).forEach((key) => { allUsage[key] += usage[key]; });
+      const forcedCall = (forced.output || []).find((item: any) => item.type === "function_call" && item.name === "suggest_seating");
+      if (forcedCall) {
+        calledTools.push("suggest_seating");
+        outputs.push({ tool: "suggest_seating", data: await runTool(auth.restaurantId, forcedCall) });
+      }
+    }
+    if (outputs.length) {
       // `store:false` intentionally keeps the thread out of OpenAI response
       // storage. A fresh synthesis turn is therefore used instead of
       // previous_response_id; it receives only the completed read-only
