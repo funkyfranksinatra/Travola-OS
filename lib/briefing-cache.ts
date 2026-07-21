@@ -1,24 +1,25 @@
-type CachedBriefing = { value: unknown; expiresAt: number };
+import { prisma } from "@/lib/prisma";
 
-const briefings = new Map<string, CachedBriefing>();
 const TTL_MS = 30 * 60 * 1000;
-const keyFor = (restaurantId: string, date: string) => `${restaurantId}:${date}`;
 
-export function getBriefingCache(restaurantId: string, date: string) {
-  const key = keyFor(restaurantId, date);
-  const hit = briefings.get(key);
-  if (!hit) return null;
-  if (hit.expiresAt <= Date.now()) {
-    briefings.delete(key);
-    return null;
-  }
-  return hit.value;
+export async function getBriefingCache(restaurantId: string, date: string) {
+  const hit = await prisma.dailyBriefing.findUnique({
+    where: { restaurantId_date: { restaurantId, date } },
+    select: { payload: true, createdAt: true },
+  });
+  if (!hit || hit.createdAt.getTime() + TTL_MS <= Date.now()) return null;
+  return hit.payload;
 }
 
-export function putBriefingCache(restaurantId: string, date: string, value: unknown) {
-  briefings.set(keyFor(restaurantId, date), { value, expiresAt: Date.now() + TTL_MS });
+export async function putBriefingCache(restaurantId: string, date: string, value: unknown) {
+  await prisma.dailyBriefing.upsert({
+    where: { restaurantId_date: { restaurantId, date } },
+    create: { restaurantId, date, payload: value as never },
+    // A re-generation begins a new freshness window without a second timestamp.
+    update: { payload: value as never, createdAt: new Date() },
+  });
 }
 
-export function clearBriefingCache(restaurantId: string, date: string) {
-  briefings.delete(keyFor(restaurantId, date));
+export async function clearBriefingCache(restaurantId: string, date: string) {
+  await prisma.dailyBriefing.deleteMany({ where: { restaurantId, date } });
 }
