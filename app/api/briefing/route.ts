@@ -39,11 +39,12 @@ const betaOutputText = (response: any) => (response?.output || [])
 
 function fallbackBriefing(snapshot: any) {
   const forecast = snapshot.forecast as any;
-  const covers = Number.isFinite(forecast?.covers?.expected) ? forecast.covers.expected : null;
-  const confidence = forecast?.covers?.confidence || "not enough forecast data";
+  const intel = snapshot.shiftIntel as any;
+  const covers = Number.isFinite(forecast?.covers?.expected) ? forecast.covers.expected : Number.isFinite(intel?.expectedCovers?.value) ? intel.expectedCovers.value : null;
+  const confidence = forecast?.covers?.confidence || (intel?.expectedCovers?.source === "model" ? "deterministic model — run Predictor for research factors" : "not enough forecast data");
   return {
     headline: covers != null ? `Plan for about ${covers} covers.` : "Not enough predictor history yet — run a forecast before the huddle.",
-    forecast: { covers, confidence, drivers: covers != null ? ["owner forecast cache"] : ["forecast unavailable"] },
+    forecast: { covers, confidence, drivers: covers != null ? [intel?.expectedCovers?.source === "model" ? "shift intelligence model" : "stored predictor forecast"] : ["forecast unavailable"] },
     staffing: { recommendation: snapshot.roster.filter((server: any) => server.onShift).length ? "Review the on-shift roster against the book." : "No active roster is recorded for this date.", notes: [] },
     watchouts: snapshot.signals.pacingClusters.length ? snapshot.signals.pacingClusters.map((cluster: any) => `${cluster.time}: ${cluster.covers} covers across ${cluster.parties} parties.`) : ["No pacing cluster is visible yet."],
     vips: snapshot.signals.vipsAndRegulars.map((party: any) => `${party.name} · ${party.size}`),

@@ -1,0 +1,6 @@
+{
+  "crons": [
+    { "path": "/api/cron/shift-forecast", "schedule": "15 8 * * 1" },
+    { "path": "/api/cron/forecast-watchdog", "schedule": "30 11 * * *" }
+  ]
+}

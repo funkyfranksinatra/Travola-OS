@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { getForecastCache } from "@/lib/forecast-cache";
+import { getShiftIntel } from "@/lib/shift-intel";
 import { serviceDateOf, toTimeStr } from "@/lib/db-mappers";
 
 export async function getBriefingSnapshot(restaurantId: string, date: string, suppliedForecast?: unknown) {
   const serviceDate = serviceDateOf(date);
-  const [bookRows, roster, servers, shiftRows, history] = await Promise.all([
+  const [bookRows, roster, servers, shiftRows, history, shiftIntel, cachedForecast] = await Promise.all([
     prisma.reservation.findMany({
       where: { restaurantId, serviceDate, status: { in: ["UPCOMING", "PARTIALLY_ARRIVED", "SEATED"] } },
       include: { guest: { select: { name: true, vip: true, totalVisits: true } }, tables: { select: { tableId: true } } },
@@ -17,6 +18,8 @@ export async function getBriefingSnapshot(restaurantId: string, date: string, su
       where: { restaurantId, serviceDate: { lt: serviceDate }, status: "FINISHED" },
       select: { serviceDate: true, partySize: true, turnMinutes: true }, orderBy: { serviceDate: "desc" }, take: 240,
     }),
+    getShiftIntel(restaurantId, date),
+    getForecastCache(restaurantId, date),
   ]);
 
   const book = bookRows.map((row) => ({
@@ -56,7 +59,10 @@ export async function getBriefingSnapshot(restaurantId: string, date: string, su
 
   return {
     date,
-    forecast: getForecastCache(restaurantId, date) || suppliedForecast || null,
+    // The deterministic dossier is the briefing's volume/staffing source.
+    // `forecast` stays for the existing worker prompt shape and UI contract.
+    forecast: cachedForecast || suppliedForecast || null,
+    shiftIntel,
     book,
     signals: {
       bookedCovers: book.reduce((sum, party) => sum + party.size, 0),

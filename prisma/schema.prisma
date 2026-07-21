@@ -93,6 +93,8 @@ model Restaurant {
   settings          RestaurantSettings?
   serviceDayStaff   ServiceDayStaff[]
   dailyBriefings    DailyBriefing[]
+  shiftForecasts   ShiftForecast[]
+  forecastAccuracy ForecastAccuracy[]
 }
 
 // ─── CRM ─────────────────────────────────────────────────────────────
@@ -441,6 +443,42 @@ model DailyBriefing {
   createdAt    DateTime   @default(now())
 
   @@unique([restaurantId, date])
+}
+
+/// Durable, tenant-scoped predictor output. Unlike the former process cache,
+/// this is available to the co-pilot, briefing, and scheduled jobs across
+/// serverless instances without ever starting fresh web research on read.
+model ShiftForecast {
+  id           String     @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  date         String
+  /// "manual" is a Predictor-tab run; weekly and autocorrect are scheduler
+  /// outputs. Kept as a string so this additive rollout needs no enum DDL.
+  source       String
+  payload      Json
+  createdAt    DateTime   @default(now())
+
+  @@unique([restaurantId, date])
+  @@index([restaurantId, createdAt])
+}
+
+/// Deterministic after-service scoring of a ShiftForecast against recorded
+/// outcomes. A unique daily row prevents an anomalous close from repeatedly
+/// triggering the same restaurant's corrective weekly refresh.
+model ForecastAccuracy {
+  id              String     @id @default(cuid())
+  restaurantId    String
+  restaurant      Restaurant @relation(fields: [restaurantId], references: [id])
+  date            String
+  predicted       Json
+  actual          Json
+  errorScore      Float
+  triggeredRerun  Boolean    @default(false)
+  createdAt       DateTime   @default(now())
+
+  @@unique([restaurantId, date])
+  @@index([restaurantId, createdAt])
 }
 
 /// Per-service-day staff record: who was on shift and how the floor was
