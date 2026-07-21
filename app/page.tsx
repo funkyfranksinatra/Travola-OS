@@ -2905,6 +2905,8 @@ function PredictorView({ forecast = null, loading = false, error = null, onRefre
     return out;
   }, []);
   const f = forecast;
+  const cachedSource = f?.cached ? String(f?.shiftIntel?.source || 'stored') : null;
+  const cachedDay = parseDateKey(date)?.toLocaleDateString(undefined, { weekday: 'short' }) || date;
   const maxHourly = f && f.hourly && f.hourly.length ? Math.max(...f.hourly.map(x => x.expected), 1) : 1;
   const verdictStyle = f && f.staffing ? (
     f.staffing.verdict === 'under' ? 'text-amber-300 border-amber-500/50 bg-amber-500/10'
@@ -2936,6 +2938,9 @@ function PredictorView({ forecast = null, loading = false, error = null, onRefre
               }`}>{c.label}</button>
           ))}
         </div>
+        {cachedSource && (
+          <div className="mb-3 font-mono text-[9px] uppercase tracking-[0.1em] text-ink-500">cached · {cachedSource} forecast · {cachedDay}</div>
+        )}
         <GamePlanCard briefing={briefing} loading={briefingLoading} error={briefingError} onGenerate={onGenerateBriefing} date={date} />
         {/* No manual "declare" toggles: events, promotions, construction
             and competitor action are researched live from the web per
@@ -8528,7 +8533,7 @@ export default function Home({ hostMode = false } = {}) {
   }), [tables]);
 
   // ─── AI Predictor — fetch on tab open, 60s cache ─────────────────
-  const fetchPredictions = async () => {
+  const fetchPredictions = async (regenerate = false) => {
     const requestId = ++predictorRequestRef.current;
     const requestedDate = predictorDate;
     setPredictorLoading(true);
@@ -8537,7 +8542,7 @@ export default function Home({ hostMode = false } = {}) {
       const res = await fetch('/api/predict', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ date: requestedDate }),
+        body: JSON.stringify({ date: requestedDate, regenerate }),
       });
       if (!res.ok) {
         const errBody = await res.json().catch(() => ({}));
@@ -8569,6 +8574,8 @@ export default function Home({ hostMode = false } = {}) {
     setBriefingData(null);
     setPredictorFetchedAt(null);
     predictorKeyRef.current = '';
+    setPredictorLoading(false);
+    setPredictorError(null);
   }, [predictorDate]);
 
   const fetchBriefing = async (regenerate = false) => {
@@ -8600,7 +8607,7 @@ export default function Home({ hostMode = false } = {}) {
       fetchPredictions();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, predictorDate]);
+  }, [activeTab, predictorDate, predictorLoading]);
 
   // ─── AI Seating Agent — fetch on party selection OR reassign mode ─
   useEffect(() => {
@@ -10274,7 +10281,7 @@ export default function Home({ hostMode = false } = {}) {
           {activeTab === "service" && <ServiceView serviceLog={serviceLog} now={now} onRefresh={loadServiceLog} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />}
           {activeTab === "timeline" && <TimelineView reservations={todaysReservations} restaurantHours={restaurantHours} onSelectReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} />}
           {activeTab === "waitlist" && <WaitlistView waitlist={waitlist} reservations={todaysReservations} now={now} onSeatParty={seatFromWaitlist} onOpenReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} onDeleteParty={(id) => requestDelete('waitlist', id)} />}
-          {activeTab === "predictor" && <PredictorView forecast={predictorData} loading={predictorLoading} error={predictorError} onRefresh={fetchPredictions} date={predictorDate} setDate={setPredictorDate} briefing={briefingData} briefingLoading={briefingLoading} briefingError={briefingError} onGenerateBriefing={fetchBriefing} />}
+          {activeTab === "predictor" && <PredictorView forecast={predictorData} loading={predictorLoading} error={predictorError} onRefresh={() => fetchPredictions(true)} date={predictorDate} setDate={setPredictorDate} briefing={briefingData} briefingLoading={briefingLoading} briefingError={briefingError} onGenerateBriefing={fetchBriefing} />}
           {activeTab === "settings" && <SettingsView setEditMode={setEditMode} setActiveTab={setActiveTab} floors={floors} tables={tables} servers={servers} roles={roles} addServer={addServer} removeServer={removeServer} setServerColor={setServerColor} setServerRoles={setServerRoles} addRole={addRole} removeRole={removeRole} restaurantHours={restaurantHours} setRestaurantHours={setRestaurantHours} prefs={prefs} setPref={setPref} onResetLiveFloor={resetLiveFloor} onOpenImport={() => setImportOpen(true)} onOpenMigrate={() => setMigrateOpen(true)} onReplayTips={replayFeatureTour} restaurantName={restaurantName} onSignOut={() => setSignOutConfirm(true)} onLocationConfirmed={() => { if (onboarding?.stage === 'location') setOnboardingStage('settings-key'); }} />}
           {activeTab === "calendar" && (
             <CalendarView
