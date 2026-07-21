@@ -63,6 +63,7 @@ export async function getBriefingSnapshot(restaurantId: string, date: string, su
     // `forecast` stays for the existing worker prompt shape and UI contract.
     forecast: cachedForecast || suppliedForecast || null,
     shiftIntel,
+    perServerLoad: (shiftIntel as any)?.staffing?.perServer || [],
     book,
     signals: {
       bookedCovers: book.reduce((sum, party) => sum + party.size, 0),
