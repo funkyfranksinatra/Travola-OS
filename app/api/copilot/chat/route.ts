@@ -2,7 +2,9 @@
 import OpenAI from "openai";
 import { COPILOT_MODEL } from "@/lib/ai-models";
 import { requireRestaurantId } from "@/lib/tenant";
-import { getCachedForecast, getFloorState, getReservations, getRoster, getServiceLog, getWaitlist, suggestSeating } from "@/lib/copilot-data";
+import { getCachedForecast, getCopilotSchedule, getFloorState, getHistory, getReservations, getRoster, getServiceLog, getWaitlist, suggestSeating } from "@/lib/copilot-data";
+import { getFeatureGuide } from "@/lib/feature-guide";
+import { todayKey } from "@/lib/db-mappers";
 
 export const maxDuration = 120;
 
@@ -11,6 +13,9 @@ const MAX_TOOL_ROUNDS = 8;
 const PRICE = { input: 2.5 / 1_000_000, output: 15 / 1_000_000 };
 
 const emptyParameters = { type: "object", properties: {}, additionalProperties: false };
+// OpenAI strict schemas require every declared property in `required`.
+// `null` is the explicit optional/default form: it means use viewDate.
+const dateParameters = { type: "object", properties: { date: { type: ["string", "null"], description: "YYYY-MM-DD, or null to use the restaurant's viewed date." } }, required: ["date"], additionalProperties: false };
 const readTool = (name: string, description: string, parameters = emptyParameters) => ({
   type: "function",
   name,
@@ -25,11 +30,13 @@ const readTool = (name: string, description: string, parameters = emptyParameter
 const tools = [
   { type: "programmatic_tool_calling" },
   readTool("get_floor_state", "Read the current floor: tables, occupancy, parties, seated durations, zones, and assigned servers."),
-  readTool("get_reservations", "Read today's active reservation book, including target times, sizes, statuses, VIP flag, and assigned tables."),
+  readTool("get_reservations", "Read the viewed date's reservation book, including target times, sizes, statuses, VIP flag, and assigned tables. Optional date defaults to viewDate.", dateParameters),
   readTool("get_waitlist", "Read the current waiting and notified walk-in queue with party sizes and waiting durations."),
-  readTool("get_roster", "Read today's on-shift roster and per-server service-day covers and tables worked."),
-  readTool("get_service_log", "Read today's seated and finished parties and observed turn-time history."),
-  readTool("get_forecast", "Read today's already-cached predictor result. It never starts predictor research; if absent, say so."),
+  readTool("get_roster", "Read the viewed date's planned/on-shift roster and per-server covers and tables worked. Optional date defaults to viewDate.", dateParameters),
+  readTool("get_service_log", "Read the viewed date's seated and finished parties and observed turn-time history. Optional date defaults to viewDate.", dateParameters),
+  readTool("get_history", "Read recorded daily covers and turn aggregates for a date range. Use for past-date and last-year comparisons; it returns an explicit no-data result when history is absent. Use null for either bound to default to viewDate.", { type: "object", properties: { from: { type: ["string", "null"], description: "YYYY-MM-DD inclusive, or null" }, to: { type: ["string", "null"], description: "YYYY-MM-DD inclusive, or null" } }, required: ["from", "to"], additionalProperties: false }),
+  readTool("get_forecast", "Read an already-cached predictor result for a date. It never starts predictor research; if absent, say so.", dateParameters),
+  readTool("get_feature_guide", "Read the versioned Travola feature guide. Use this for any how-to or how-does-it-work question; call with topic 'list' to inspect the topic index, then a matching topic. Never invent a UI path.", { type: "object", properties: { topic: { type: ["string", "null"], description: "Guide topic, alias, 'list', or null for the topic index." } }, required: ["topic"], additionalProperties: false }),
   readTool("suggest_seating", "Read-only seating recommendation using the existing seater's deterministic availability, reservation hold, capacity, merge, and load constraints. This does not seat anyone.", {
     type: "object", properties: { partySize: { type: "integer", minimum: 1, maximum: 30, description: "Party size to evaluate." } }, required: ["partySize"], additionalProperties: false,
   }),
@@ -40,7 +47,7 @@ const tools = [
 // it guarantees a party-fit answer has an actual deterministic seat check.
 const forcedSeatTool = { ...tools.find((tool: any) => tool.name === "suggest_seating"), allowed_callers: ["direct"] };
 
-const system = `You are Travola's concise floor-manager co-pilot. You are co-pilot, not autopilot: advise only and never imply an action was taken. Use numbers before prose. Answer only from read-only tool data; use the relevant tools before answering. For any question about whether or where a party can fit, always call suggest_seating as well as the relevant current-floor, reservation, or waitlist reads. If the data is missing, stale, or insufficient, say that plainly. Keep answers practical and short. Never invent a table, party, server, forecast, or booking.`;
+const systemFor = (context: any) => `You are Travola's concise floor-manager co-pilot. You are co-pilot, not autopilot: advise only and never imply an action was taken. Use numbers before prose. Answer only from read-only tool data; use the relevant tools before answering. Today is ${context.today}; the restaurant is viewing ${context.viewDate}. Schedule for that viewed date: ${context.schedule.isOpen ? "OPEN" : "CLOSED"}; regular hours ${context.schedule.hours.opening}–${context.schedule.hours.closing}; days-open Sunday-first=${JSON.stringify(context.schedule.daysOpen)}; owner baseline=${JSON.stringify(context.schedule.baseline)}. If viewDate is in the past, analyze recorded history. If it is future, plan from that date's reservations, cached forecast, same-weekday history, and the owner baseline when present; state uncertainty. If the viewed day is closed, say so plainly. For last-year/comparative questions use get_history and get_forecast; never trigger live predictor research, and if no cached forecast exists say so and suggest running Predictor. For any question about whether or where a party can fit, always call suggest_seating as well as the relevant current-floor, reservation, or waitlist reads. For every how-to or feature-behavior question, call get_feature_guide and answer only from its guide text; if no entry exists, say so. If date data is missing, say "no data for that date" plainly. Keep answers practical and short. Never invent a table, party, server, forecast, booking, or UI path.`;
 
 const cleanMessages = (body: unknown) => Array.isArray((body as { messages?: unknown[] })?.messages)
   ? (body as { messages: unknown[] }).messages.slice(-24).flatMap((item) => {
@@ -65,16 +72,26 @@ function usageOf(response: any) {
   return { inputTokens, outputTokens, totalTokens: Number(usage.total_tokens || inputTokens + outputTokens), estimatedUsd: Number((inputTokens * PRICE.input + outputTokens * PRICE.output).toFixed(6)) };
 }
 
-async function runTool(restaurantId: string, call: any) {
+function validDate(value: unknown, fallback: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? String(value) : fallback;
+}
+
+function featureHelpIntent(text: string) {
+  return /\b(how\s+(?:do|does|can)|where\s+(?:do|can)|what\s+does|help\s+(?:me\s+)?with)\b/i.test(text);
+}
+
+async function runTool(restaurantId: string, call: any, viewDate: string) {
   let args: Record<string, unknown> = {};
   try { args = JSON.parse(call.arguments || "{}"); } catch { return { error: "invalid_tool_arguments" }; }
   switch (call.name) {
     case "get_floor_state": return getFloorState(restaurantId);
-    case "get_reservations": return getReservations(restaurantId);
+    case "get_reservations": return getReservations(restaurantId, validDate(args.date, viewDate));
     case "get_waitlist": return getWaitlist(restaurantId);
-    case "get_roster": return getRoster(restaurantId);
-    case "get_service_log": return getServiceLog(restaurantId);
-    case "get_forecast": return getCachedForecast(restaurantId);
+    case "get_roster": return getRoster(restaurantId, validDate(args.date, viewDate));
+    case "get_service_log": return getServiceLog(restaurantId, validDate(args.date, viewDate));
+    case "get_history": return getHistory(restaurantId, validDate(args.from, viewDate), validDate(args.to, viewDate));
+    case "get_forecast": return getCachedForecast(restaurantId, validDate(args.date, viewDate));
+    case "get_feature_guide": return getFeatureGuide(typeof args.topic === "string" ? args.topic : "list");
     case "suggest_seating": return suggestSeating(restaurantId, Number(args.partySize));
     default: return { error: "unknown_read_only_tool" };
   }
@@ -84,9 +101,29 @@ export async function POST(req: Request) {
   const auth = requireRestaurantId(req);
   if ("response" in auth) return auth.response;
   if (!process.env.OPENAI_API_KEY) return Response.json({ error: "copilot_unavailable" }, { status: 503 });
-  const messages = cleanMessages(await req.json().catch(() => ({})));
+  const body = await req.json().catch(() => ({}));
+  const messages = cleanMessages(body);
   if (!messages.length || messages[messages.length - 1].role !== "user") return Response.json({ error: "message_required" }, { status: 400 });
-  const fitIntent = fitIntentPartySize(messages[messages.length - 1].content);
+  const question = messages[messages.length - 1].content;
+  // Guide entries are versioned product truth. Recognized how-to prompts do
+  // not need a model turn (and therefore cannot invent a stale UI path).
+  if (featureHelpIntent(question)) {
+    const guide = getFeatureGuide(question) as any;
+    if (guide.found) return Response.json({
+      answer: `${guide.title}\n\n${guide.guide}`,
+      tools: ["get_feature_guide"],
+      metrics: { latencyMs: 0, inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedUsd: 0, programmaticToolCalls: 0, model: COPILOT_MODEL },
+    });
+  }
+  const contextInput = (body as any)?.context || {};
+  // The client sends both dates so the interaction is explicit; the server
+  // remains the authority for today's date.
+  const today = todayKey();
+  const viewDate = validDate(contextInput.viewDate, today);
+  const schedule = await getCopilotSchedule(auth.restaurantId, viewDate);
+  const context = { today, viewDate, schedule };
+  const system = systemFor(context);
+  const fitIntent = fitIntentPartySize(question);
   if (fitIntent.asksFit && !fitIntent.partySize) {
     return Response.json({
       answer: "What party size should I check? I won't guess a seating recommendation.",
@@ -112,7 +149,7 @@ export async function POST(req: Request) {
     if (calls.length) {
       outputs.push(...await Promise.all(calls.slice(0, MAX_TOOL_ROUNDS).map(async (call: any) => {
         calledTools.push(call.name);
-        return { tool: call.name, data: await runTool(auth.restaurantId, call) };
+        return { tool: call.name, data: await runTool(auth.restaurantId, call, viewDate) };
       })));
     }
     // Prompt guidance is advisory; party-fit advice is not. If the
@@ -133,7 +170,7 @@ export async function POST(req: Request) {
       const forcedCall = (forced.output || []).find((item: any) => item.type === "function_call" && item.name === "suggest_seating");
       if (forcedCall) {
         calledTools.push("suggest_seating");
-        outputs.push({ tool: "suggest_seating", data: await runTool(auth.restaurantId, forcedCall) });
+        outputs.push({ tool: "suggest_seating", data: await runTool(auth.restaurantId, forcedCall, viewDate) });
       }
     }
     if (outputs.length) {
