@@ -92,6 +92,7 @@ model Restaurant {
   floors            Floor[]
   settings          RestaurantSettings?
   serviceDayStaff   ServiceDayStaff[]
+  dailyBriefings    DailyBriefing[]
 }
 
 // ─── CRM ─────────────────────────────────────────────────────────────
@@ -427,6 +428,19 @@ model RestaurantSettings {
 
   restaurantId String @unique
   restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+}
+
+/// Server-side cache for a restaurant's generated pre-shift briefing. This
+/// intentionally lives outside settings prefs so client autosaves cannot race it.
+model DailyBriefing {
+  id           String     @id @default(cuid())
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+  date         String
+  payload      Json
+  createdAt    DateTime   @default(now())
+
+  @@unique([restaurantId, date])
 }
 
 /// Per-service-day staff record: who was on shift and how the floor was

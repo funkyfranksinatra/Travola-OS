@@ -98,11 +98,14 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const date = typeof body.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : todayKey();
   const regenerate = body.regenerate === true;
-  if (regenerate) clearBriefingCache(auth.restaurantId, date);
-  const cached = getBriefingCache(auth.restaurantId, date);
-  if (cached) return Response.json({ ...(cached as object), cached: true });
-
   const startedAt = Date.now();
+  if (regenerate) await clearBriefingCache(auth.restaurantId, date);
+  const cached = await getBriefingCache(auth.restaurantId, date);
+  if (cached) return Response.json({
+    ...(cached as object),
+    cached: true,
+    metrics: { latencyMs: Date.now() - startedAt, inputTokens: 0, outputTokens: 0, totalTokens: 0, estimatedUsd: 0, model: BRIEFING_MODEL },
+  });
   try {
     const snapshot = await getBriefingSnapshot(auth.restaurantId, date, body.forecast);
     const workerSpecs = [
@@ -141,7 +144,7 @@ export async function POST(req: Request) {
       workstreams: reports.map(({ name, ok }) => ({ name, ok })),
       metrics: { latencyMs: Date.now() - startedAt, inputTokens: workerUsage.inputTokens + synthesisUsage.inputTokens, outputTokens: workerUsage.outputTokens + synthesisUsage.outputTokens, totalTokens: workerUsage.totalTokens + synthesisUsage.totalTokens, estimatedUsd: Number((workerUsage.estimatedUsd + synthesisUsage.estimatedUsd).toFixed(6)), model: BRIEFING_MODEL },
     };
-    putBriefingCache(auth.restaurantId, date, payload);
+    await putBriefingCache(auth.restaurantId, date, payload);
     return Response.json(payload);
   } catch (error) {
     console.error("[api/briefing]", error instanceof Error ? error.message : "request_failed");
