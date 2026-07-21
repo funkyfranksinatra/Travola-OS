@@ -1,0 +1,26 @@
+▲ Next.js 16.2.6 (Turbopack)
+- Local:         http://localhost:3001
+- Network:       http://192.168.86.29:3001
+- Environments: .env.local, .env
+✓ Ready in 763ms
+
+ POST /api/auth/login 200 in 1537ms (next.js: 251ms, application-code: 1286ms)
+ POST /api/predict 200 in 208ms (next.js: 110ms, application-code: 99ms)
+ POST /api/briefing 200 in 10.4s (next.js: 953ms, application-code: 9.5s)
+ POST /api/auth/login 200 in 500ms (next.js: 23ms, application-code: 477ms)
+ POST /api/predict 200 in 114ms (next.js: 49ms, application-code: 66ms)
+ POST /api/briefing 200 in 9.3s (next.js: 55ms, application-code: 9.2s)
+ POST /api/auth/login 200 in 483ms (next.js: 3ms, application-code: 480ms)
+ POST /api/predict 200 in 32.5s (next.js: 3ms, application-code: 32.5s)
+ POST /api/briefing 200 in 14.3s (next.js: 3ms, application-code: 14.3s)
+ POST /api/auth/login 200 in 491ms (next.js: 4ms, application-code: 487ms)
+ POST /api/copilot/chat 502 in 2.9s (next.js: 641ms, application-code: 2.3s)
+ POST /api/auth/login 200 in 496ms (next.js: 25ms, application-code: 472ms)
+ POST /api/copilot/chat 200 in 4.1s (next.js: 57ms, application-code: 4.1s)
+ POST /api/auth/login 200 in 474ms (next.js: 3ms, application-code: 472ms)
+ POST /api/predict 200 in 146ms (next.js: 80ms, application-code: 66ms)
+ POST /api/briefing 200 in 8.6s (next.js: 12ms, application-code: 8.6s)
+ POST /api/auth/login 200 in 476ms (next.js: 3ms, application-code: 472ms)
+ POST /api/briefing 200 in 8ms (next.js: 3ms, application-code: 6ms)
+ POST /api/briefing 401 in 8ms (next.js: 3ms, application-code: 5ms)
+ POST /api/copilot/chat 401 in 7ms (next.js: 3ms, application-code: 5ms)
