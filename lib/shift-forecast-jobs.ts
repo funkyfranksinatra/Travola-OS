@@ -2,6 +2,7 @@ import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { RESEARCH_MODEL } from "@/lib/ai-models";
 import { getStoredForecast, putForecastCache } from "@/lib/forecast-cache";
+import { normalizeForecastPayload } from "@/lib/forecast-payload";
 import { canonicalShiftDate, getShiftIntel, invalidateShiftIntel, shiftDateOffset, shiftWeekday } from "@/lib/shift-intel";
 import { prisma } from "@/lib/prisma";
 import { serviceDateOf } from "@/lib/db-mappers";
@@ -76,7 +77,7 @@ export async function runWeeklyForecast(restaurantId: string, dates: string[], a
       lastTableOut: dossier.lastTableOut?.typical || "", staffing: dossier.staffing || {},
       factors: { used: factor.drivers.map((driver) => ({ key: "weekly_research", label: "Weekly research", detail: driver, impactPct: Math.round((factor.multiplier - 1) * 100) })), excluded: factor.drivers.length ? [] : [{ key: "weekly_research", label: "Weekly research", reason: "no external research result" }] },
     };
-    await putForecastCache(restaurantId, dossier.date, payload, actualAnchor ? "autocorrect" : "weekly");
+    await putForecastCache(restaurantId, dossier.date, await normalizeForecastPayload(restaurantId, dossier.date, payload), actualAnchor ? "autocorrect" : "weekly");
     invalidateShiftIntel(restaurantId, dossier.date);
     written.push({ date: dossier.date, expectedCovers: expected });
   }

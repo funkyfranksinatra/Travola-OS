@@ -2904,10 +2904,30 @@ function PredictorView({ forecast = null, loading = false, error = null, onRefre
     }
     return out;
   }, []);
-  const f = forecast;
+  // Stored forecasts are normalized on the server, but a malformed legacy row
+  // must never be able to take down the whole manager surface.
+  const rawForecast = forecast && typeof forecast === 'object' ? forecast : {};
+  const f = forecast ? {
+    ...rawForecast,
+    covers: { expected: '—', low: '—', high: '—', confidence: 'unknown', method: '—', ...(rawForecast.covers || {}) },
+    booked: { covers: '—', parties: '—', showRate: '—', ...(rawForecast.booked || {}) },
+    walkIns: { expected: '—', historicalSharePct: '—', ...(rawForecast.walkIns || {}) },
+    capacity: { tables: '—', seats: '—', ...(rawForecast.capacity || {}) },
+    hourly: Array.isArray(rawForecast.hourly) ? rawForecast.hourly.map((hour, index) => ({ h: index, hour: '—', booked: 0, expected: 0, waitlistRisk: 0, ...(hour || {}) })) : [],
+    peak: { start: '—', end: '—', covers: 0, ...(rawForecast.peak || {}) },
+    turn: { minutes: '—', source: '—', ...(rawForecast.turn || {}) },
+    staffing: { crew: '—', crewMethod: '—', coversPerServer: null, historicalCoversPerServer: null, verdict: 'unknown', addServers: 0, ...(rawForecast.staffing || {}) },
+    sections: Array.isArray(rawForecast.sections) ? rawForecast.sections.map(section => ({ zone: '—', expectedCovers: '—', tables: '—', seats: '—', shareSrc: '—', ...(section || {}) })) : [],
+    factors: {
+      used: Array.isArray(rawForecast.factors?.used) ? rawForecast.factors.used.filter(Boolean) : [],
+      excluded: Array.isArray(rawForecast.factors?.excluded) ? rawForecast.factors.excluded.filter(Boolean) : [],
+    },
+    lastTableOut: rawForecast.lastTableOut || '—',
+    waitlistLikely: Boolean(rawForecast.waitlistLikely),
+  } : null;
   const cachedSource = f?.cached ? String(f?.shiftIntel?.source || 'stored') : null;
   const cachedDay = parseDateKey(date)?.toLocaleDateString(undefined, { weekday: 'short' }) || date;
-  const maxHourly = f && f.hourly && f.hourly.length ? Math.max(...f.hourly.map(x => x.expected), 1) : 1;
+  const maxHourly = f && f.hourly.length ? Math.max(...f.hourly.map(x => Number(x.expected) || 0), 1) : 1;
   const verdictStyle = f && f.staffing ? (
     f.staffing.verdict === 'under' ? 'text-amber-300 border-amber-500/50 bg-amber-500/10'
     : f.staffing.verdict === 'over' ? 'text-sky-300 border-sky-500/50 bg-sky-500/10'
@@ -8578,6 +8598,12 @@ export default function Home({ hostMode = false } = {}) {
     setPredictorError(null);
   }, [predictorDate]);
 
+  // An error is terminal for the currently selected tab/date. Leaving the
+  // Predictor deliberately arms one fresh attempt when the user returns.
+  useEffect(() => {
+    if (activeTab !== 'predictor') setPredictorError(null);
+  }, [activeTab]);
+
   const fetchBriefing = async (regenerate = false) => {
     setBriefingLoading(true);
     setBriefingError(null);
@@ -8603,11 +8629,11 @@ export default function Home({ hostMode = false } = {}) {
     if (activeTab !== 'predictor') return;
     const STALE_AFTER_MS = 60_000;
     const isStale = !predictorFetchedAt || Date.now() - predictorFetchedAt > STALE_AFTER_MS || predictorKeyRef.current !== predictorDate;
-    if (isStale && !predictorLoading) {
+    if (isStale && !predictorLoading && !predictorError) {
       fetchPredictions();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, predictorDate, predictorLoading]);
+  }, [activeTab, predictorDate]);
 
   // ─── AI Seating Agent — fetch on party selection OR reassign mode ─
   useEffect(() => {

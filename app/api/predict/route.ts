@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRestaurantId } from "@/lib/tenant";
 import { RESEARCH_MODEL } from "@/lib/ai-models";
 import { getStoredForecast, putForecastCache } from "@/lib/forecast-cache";
+import { normalizeForecastPayload } from "@/lib/forecast-payload";
 import { canonicalShiftDate, getShiftIntel, invalidateShiftIntel, shiftDateOffset, shiftWeekday } from "@/lib/shift-intel";
 import { dateKeyOfService, serviceDateOf } from "@/lib/db-mappers";
 import { generateText } from "ai";
@@ -325,8 +326,9 @@ export async function POST(req: Request) {
       const stored = await getStoredForecast(restaurantId, target);
       if (stored) {
         const dossier = await getShiftIntel(restaurantId, target) as any;
+        const forecast = await normalizeForecastPayload(restaurantId, target, stored.payload);
         return Response.json({
-          ...(stored.payload as object),
+          ...forecast,
           cached: true,
           shiftIntel: { source: dossier.expectedCovers?.forecastSource || stored.source, generatedAt: dossier.expectedCovers?.generatedAt || stored.createdAt.toISOString() },
         });
