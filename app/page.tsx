@@ -2845,7 +2845,51 @@ function featureTourSteps(surface, tab, historyImported) {
       ];
 }
 
-function PredictorView({ forecast = null, loading = false, error = null, onRefresh, date, setDate }) {
+function GamePlanCard({ briefing, loading, error, onGenerate, date }) {
+  const plan = briefing?.briefing;
+  const List = ({ title, items }) => items?.length ? (
+    <div>
+      <div className="font-mono text-[9px] text-ink-500 uppercase tracking-[0.14em] mb-1.5">{title}</div>
+      <ul className="space-y-1 text-[11px] text-ink-300 leading-relaxed">{items.map((item, index) => <li key={`${title}-${index}`}>• {item}</li>)}</ul>
+    </div>
+  ) : null;
+  return (
+    <section className="mb-5 bg-panel border border-ai/30 rounded-2xl p-5 print:bg-white print:text-black print:border-black">
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <div>
+          <div className="font-mono text-[9px] text-ai uppercase tracking-[0.16em] font-bold">Tonight's Game Plan</div>
+          <div className="font-mono text-[10px] text-ink-500 mt-1">{date} · read this at the huddle</div>
+        </div>
+        <div className="flex gap-2 print:hidden">
+          {plan && <button onClick={() => window.print()} className="px-2.5 py-1.5 rounded-lg border border-border text-ink-400 hover:text-ink-50 font-mono text-[9px] uppercase tracking-[0.08em]">Print</button>}
+          <button onClick={() => onGenerate && onGenerate(!!plan)} disabled={loading} className="px-2.5 py-1.5 rounded-lg bg-ai text-bg disabled:opacity-40 font-mono text-[9px] uppercase tracking-[0.08em] font-bold">{loading ? 'Building…' : plan ? 'Re-generate' : 'Generate'}</button>
+        </div>
+      </div>
+      {loading && <div className="font-mono text-[10px] text-ai animate-pulse">◆ Luna workstreams are reading the book, demand, and roster…</div>}
+      {error && !loading && <div className="font-mono text-[10px] text-state-seated">◆ Game plan unavailable — {error}</div>}
+      {!loading && !error && !plan && <p className="font-mono text-[10px] text-ink-400 leading-relaxed">Generate a concise demand, book, and staffing huddle plan from this restaurant's current forecast and records.</p>}
+      {plan && !loading && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 print:grid-cols-2">
+          <div className="md:col-span-2 rounded-xl bg-panel-card border border-border p-3 print:bg-white print:border-black">
+            <div className="text-ink-50 font-semibold text-sm print:text-black">{plan.headline}</div>
+            <div className="font-mono text-[10px] text-ink-400 mt-1 print:text-black">Forecast: {plan.forecast.covers ?? '—'} covers · {plan.forecast.confidence}</div>
+            {plan.forecast.drivers?.length > 0 && <div className="font-mono text-[10px] text-ink-500 mt-1 print:text-black">{plan.forecast.drivers.join(' · ')}</div>}
+          </div>
+          <div className="rounded-xl bg-panel-card border border-border p-3 print:bg-white print:border-black">
+            <div className="font-mono text-[9px] text-ink-500 uppercase tracking-[0.14em] mb-1.5">Staffing</div>
+            <div className="text-[11px] text-ink-100 font-semibold print:text-black">{plan.staffing.recommendation}</div>
+            <div className="mt-2"><List title="Notes" items={plan.staffing.notes} /></div>
+          </div>
+          <div className="rounded-xl bg-panel-card border border-border p-3 space-y-3 print:bg-white print:border-black"><List title="Watchouts" items={plan.watchouts} /><List title="Prep" items={plan.prepNotes} /></div>
+          <div className="rounded-xl bg-panel-card border border-border p-3 print:bg-white print:border-black"><List title="VIPs & regulars" items={plan.vips} /></div>
+          <div className="rounded-xl bg-panel-card border border-border p-3 print:bg-white print:border-black"><List title="Large parties" items={plan.largeParties} /></div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function PredictorView({ forecast = null, loading = false, error = null, onRefresh, date, setDate, briefing = null, briefingLoading = false, briefingError = null, onGenerateBriefing = null }) {
   // 7-day selector chips
   const dayChips = useMemo(() => {
     const out = [];
@@ -2892,6 +2936,7 @@ function PredictorView({ forecast = null, loading = false, error = null, onRefre
               }`}>{c.label}</button>
           ))}
         </div>
+        <GamePlanCard briefing={briefing} loading={briefingLoading} error={briefingError} onGenerate={onGenerateBriefing} date={date} />
         {/* No manual "declare" toggles: events, promotions, construction
             and competitor action are researched live from the web per
             forecast date and appear in the factors card below. */}
@@ -8373,6 +8418,9 @@ export default function Home({ hostMode = false } = {}) {
   const [predictorLoading,   setPredictorLoading]   = useState(false);
   const [predictorError,     setPredictorError]     = useState(null);
   const [predictorFetchedAt, setPredictorFetchedAt] = useState(null);
+  const [briefingData,       setBriefingData]       = useState(null);
+  const [briefingLoading,    setBriefingLoading]    = useState(false);
+  const [briefingError,      setBriefingError]      = useState(null);
   const [predictorDate, setPredictorDate] = useState(() => {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -8488,10 +8536,33 @@ export default function Home({ hostMode = false } = {}) {
       setPredictorData(data);
       setPredictorFetchedAt(Date.now());
       predictorKeyRef.current = predictorDate;
+      return data;
     } catch (e) {
       setPredictorError(e instanceof Error ? e.message : 'Failed to fetch predictions');
+      return null;
     } finally {
       setPredictorLoading(false);
+    }
+  };
+
+  const fetchBriefing = async (regenerate = false) => {
+    setBriefingLoading(true);
+    setBriefingError(null);
+    try {
+      let forecastForBriefing = predictorData;
+      if (!forecastForBriefing || predictorKeyRef.current !== predictorDate) forecastForBriefing = await fetchPredictions();
+      if (!forecastForBriefing) throw new Error('Run a forecast first');
+      const res = await fetch('/api/briefing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: predictorDate, regenerate, forecast: forecastForBriefing }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setBriefingData(data);
+    } catch (e) {
+      setBriefingError(e instanceof Error ? e.message : 'Failed to build game plan');
+    } finally {
+      setBriefingLoading(false);
     }
   };
 
@@ -10177,7 +10248,7 @@ export default function Home({ hostMode = false } = {}) {
           {activeTab === "service" && <ServiceView serviceLog={serviceLog} now={now} onRefresh={loadServiceLog} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />}
           {activeTab === "timeline" && <TimelineView reservations={todaysReservations} restaurantHours={restaurantHours} onSelectReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} />}
           {activeTab === "waitlist" && <WaitlistView waitlist={waitlist} reservations={todaysReservations} now={now} onSeatParty={seatFromWaitlist} onOpenReservation={(id) => { if (id) setSelectedTableId(null); setSelectedReservationId(id); }} onDeleteParty={(id) => requestDelete('waitlist', id)} />}
-          {activeTab === "predictor" && <PredictorView forecast={predictorData} loading={predictorLoading} error={predictorError} onRefresh={fetchPredictions} date={predictorDate} setDate={setPredictorDate} />}
+          {activeTab === "predictor" && <PredictorView forecast={predictorData} loading={predictorLoading} error={predictorError} onRefresh={fetchPredictions} date={predictorDate} setDate={setPredictorDate} briefing={briefingData} briefingLoading={briefingLoading} briefingError={briefingError} onGenerateBriefing={fetchBriefing} />}
           {activeTab === "settings" && <SettingsView setEditMode={setEditMode} setActiveTab={setActiveTab} floors={floors} tables={tables} servers={servers} roles={roles} addServer={addServer} removeServer={removeServer} setServerColor={setServerColor} setServerRoles={setServerRoles} addRole={addRole} removeRole={removeRole} restaurantHours={restaurantHours} setRestaurantHours={setRestaurantHours} prefs={prefs} setPref={setPref} onResetLiveFloor={resetLiveFloor} onOpenImport={() => setImportOpen(true)} onOpenMigrate={() => setMigrateOpen(true)} onReplayTips={replayFeatureTour} restaurantName={restaurantName} onSignOut={() => setSignOutConfirm(true)} onLocationConfirmed={() => { if (onboarding?.stage === 'location') setOnboardingStage('settings-key'); }} />}
           {activeTab === "calendar" && (
             <CalendarView

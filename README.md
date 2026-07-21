@@ -49,7 +49,8 @@ Key decisions made during the collaboration:
 - Restaurant setup is resumable, skippable, and persisted in settings so a front-desk device cannot be trapped in a walkthrough.
 - Tour demo state is tenant-scoped and cleaned at completion, skip, and next load to avoid polluting operational records.
 - Existing Volario’s data was preserved through the tenancy rollout and excluded from new onboarding/tour prompts.
-- The GPT-5.6 co-pilot uses the official Responses API with Programmatic Tool Calling and only tenant-scoped read tools; GPT-5.6 Luna powers bounded, deduplicated proactive floor alerts. Neither feature can mutate the floor or trigger predictor research.
+- The GPT-5.6 co-pilot uses the official Responses API with Programmatic Tool Calling and only tenant-scoped read tools; GPT-5.6 Luna powers bounded, deduplicated proactive floor alerts. Party-fit turns are server-enforced to use the deterministic read-only seating check.
+- Tonight's Game Plan uses the official Responses multi-agent beta: three bounded Luna workstreams (demand, reservation book, staffing) run in parallel, then Terra synthesizes a structured, cacheable pre-shift briefing. The briefing never mutates the floor or invents missing history.
 
 ### Work record
 
