@@ -2,7 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { requireRestaurantId } from "@/lib/tenant";
 import { RESEARCH_MODEL } from "@/lib/ai-models";
 import { putForecastCache } from "@/lib/forecast-cache";
-import { invalidateShiftIntel } from "@/lib/shift-intel";
+import { canonicalShiftDate, getShiftIntel, invalidateShiftIntel, shiftDateOffset, shiftWeekday } from "@/lib/shift-intel";
+import { dateKeyOfService, serviceDateOf } from "@/lib/db-mappers";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
@@ -83,7 +84,6 @@ function monthInRange(month: number, from?: number | string, to?: number | strin
   return start <= end ? month >= start && month <= end : month >= start || month <= end;
 }
 
-const dateStr = (d: Date) => d.toISOString().slice(0, 10);
 const median = (a: number[]) => {
   if (!a.length) return 0;
   const s = [...a].sort((p, q) => p - q);
@@ -278,15 +278,18 @@ export async function POST(req: Request) {
   try {
     const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
     const body = await req.json().catch(() => ({}));
-    const today = new Date();
-    const todayStr = dateStr(today);
-    let target = typeof body?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.date) ? body.date : todayStr;
+    // Resolve this once before making any date decision.  A service date is a
+    // restaurant-calendar key, never a UTC serialization of a local Date.
+    const settingsRow = await prisma.restaurantSettings.findUnique({ where: { restaurantId } }).catch(() => null);
+    const locPref = (settingsRow?.prefs as { location?: { name?: string; lat?: string; lon?: string; address?: string; timeZone?: string } } | null)?.location || {};
+    const todayStr = canonicalShiftDate(new Date(), locPref.timeZone);
+    let target = canonicalShiftDate(typeof body?.date === "string" ? body.date : todayStr, locPref.timeZone);
     // clamp: today .. today+7
-    const targetMs = new Date(`${target}T12:00:00Z`).getTime();
-    const todayMs = new Date(`${todayStr}T12:00:00Z`).getTime();
+    const targetMs = serviceDateOf(target).getTime();
+    const todayMs = serviceDateOf(todayStr).getTime();
     if (targetMs < todayMs) target = todayStr;
-    if (targetMs > todayMs + 7 * DAY) target = dateStr(new Date(todayMs + 7 * DAY));
-    const dow = new Date(`${target}T12:00:00Z`).getUTCDay();
+    if (targetMs > todayMs + 7 * DAY) target = shiftDateOffset(todayStr, 7);
+    const dow = shiftWeekday(target);
 
     // ── History pull ─────────────────────────────────────────────────
     const recentSince = new Date(todayMs - 130 * DAY);
@@ -296,8 +299,6 @@ export async function POST(req: Request) {
     const lyTo = new Date(lyCenter.getTime() + 14 * DAY);
 
     // ── Location resolution (settings → env) ────────────────────────
-    const settingsRow = await prisma.restaurantSettings.findUnique({ where: { restaurantId } }).catch(() => null);
-    const locPref = (settingsRow?.prefs as { location?: { name?: string; lat?: string; lon?: string; address?: string } } | null)?.location || {};
     const prefs = (settingsRow?.prefs || {}) as {
       baseline?: { avgCovers?: number; maxCovers?: number; minCovers?: number; resSharePct?: number; holidayBoostPct?: number; eventBoostPct?: number; seasons?: { slow?: Array<{ from?: number; to?: number }>; busy?: Array<{ from?: number; to?: number }>; offFrom?: number; offTo?: number; onFrom?: number; onTo?: number } | null; turnMinutes?: number };
       daysOpen?: boolean[];
@@ -314,7 +315,8 @@ export async function POST(req: Request) {
       };
       await putForecastCache(restaurantId, target, closedForecast, "manual");
       invalidateShiftIntel(restaurantId, target);
-      return Response.json(closedForecast);
+      const dossier = await getShiftIntel(restaurantId, target) as any;
+      return Response.json({ ...(dossier.forecast?.payload || closedForecast), shiftIntel: { source: dossier.expectedCovers?.forecastSource || "model", generatedAt: dossier.expectedCovers?.generatedAt || null } });
     }
     const locName = (locPref.name || process.env.RESTAURANT_NAME || "").trim() || undefined;
     const locLat = String(locPref.lat || process.env.RESTAURANT_LAT || "").trim();
@@ -348,7 +350,7 @@ export async function POST(req: Request) {
       prisma.reservation.findMany({
         where: {
           restaurantId,
-          serviceDate: new Date(`${target}T00:00:00Z`),
+          serviceDate: serviceDateOf(target),
           status: { in: ["UPCOMING", "PARTIALLY_ARRIVED", "SEATED"] },
         },
         select: { partySize: true, targetTime: true, source: true, vip: true },
@@ -372,9 +374,9 @@ export async function POST(req: Request) {
     let showFinished = 0, showNo = 0;
     const zoneCovers = new Map<string, number>();
     for (const r of recentRows) {
-      const key = dateStr(new Date(r.serviceDate));
+      const key = dateKeyOfService(r.serviceDate);
       const seatedish = r.status === "SEATED" || r.status === "FINISHED";
-      if (!byDay.has(key)) byDay.set(key, { covers: 0, walkIn: 0, dow: r.dayOfWeek });
+      if (!byDay.has(key)) byDay.set(key, { covers: 0, walkIn: 0, dow: shiftWeekday(key) });
       const rec = byDay.get(key)!;
       if (seatedish) {
         rec.covers += r.partySize;
@@ -432,7 +434,7 @@ export async function POST(req: Request) {
     // Last-year seasonality blend
     const lyByDay = new Map<string, number>();
     for (const r of lastYearRows) {
-      const k = dateStr(new Date(r.serviceDate));
+      const k = dateKeyOfService(r.serviceDate);
       lyByDay.set(k, (lyByDay.get(k) || 0) + r.partySize);
     }
     if (lyByDay.size >= 3 && base > 0) {
@@ -588,7 +590,7 @@ export async function POST(req: Request) {
     const serverCountByDow = new Map<number, number[]>();
     const shiftKey = new Map<string, Set<string>>();
     for (const ss of shiftServers) {
-      const k = `${dateStr(new Date(ss.shift.serviceDate))}`;
+      const k = dateKeyOfService(ss.shift.serviceDate);
       if (!shiftKey.has(k)) shiftKey.set(k, new Set());
       shiftKey.get(k)!.add(ss.serverId);
     }
@@ -597,8 +599,7 @@ export async function POST(req: Request) {
       if (!serverCountByDow.has(d)) serverCountByDow.set(d, []);
     }
     for (const [k, set] of shiftKey) {
-      const row = recentRows.find((r) => dateStr(new Date(r.serviceDate)) === k);
-      const dowK = row ? row.dayOfWeek : new Date(`${k}T12:00:00Z`).getUTCDay();
+      const dowK = shiftWeekday(k);
       if (!serverCountByDow.has(dowK)) serverCountByDow.set(dowK, []);
       serverCountByDow.get(dowK)!.push(set.size);
     }
@@ -705,7 +706,12 @@ export async function POST(req: Request) {
     };
     await putForecastCache(restaurantId, target, forecast, "manual");
     invalidateShiftIntel(restaurantId, target);
-    return Response.json(forecast);
+    // The tab renders the same post-write dossier that chat, briefing and the
+    // sentry read.  This prevents a separately-computed UI total drifting
+    // from the durable shift-intelligence source of truth.
+    const dossier = await getShiftIntel(restaurantId, target) as any;
+    const storedPayload = dossier.forecast?.payload;
+    return Response.json({ ...(storedPayload || forecast), shiftIntel: { source: dossier.expectedCovers?.forecastSource || "model", generatedAt: dossier.expectedCovers?.generatedAt || null } });
   } catch (err) {
     console.error("[api/predict]", err);
     return Response.json({ error: "predict_failed" }, { status: 500 });
