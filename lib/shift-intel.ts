@@ -111,9 +111,9 @@ export async function getShiftIntel(restaurantId: string, date: string): Promise
       where: { restaurantId, serviceDate: { gte: since, lt: serviceDate }, status: { in: ["SEATED", "FINISHED"] } },
       select: { serviceDate: true, dayOfWeek: true, partySize: true, source: true, targetTime: true, seatedTime: true, finishedTime: true, turnMinutes: true, tables: { select: { table: { select: { area: true } } } } },
     }),
-    prisma.table.findMany({ where: { restaurantId, active: true }, select: { area: true, capacity: true } }),
-    prisma.serviceDayStaff.findUnique({ where: { restaurantId_serviceDate: { restaurantId, serviceDate } }, select: { roster: true } }),
-    prisma.server.findMany({ where: { restaurantId, active: true }, select: { id: true, onShift: true, roles: true } }),
+    prisma.table.findMany({ where: { restaurantId, active: true }, select: { id: true, area: true, capacity: true } }),
+    prisma.serviceDayStaff.findUnique({ where: { restaurantId_serviceDate: { restaurantId, serviceDate } }, select: { roster: true, sections: true } }),
+    prisma.server.findMany({ where: { restaurantId, active: true }, select: { id: true, name: true, onShift: true, roles: true } }),
     prisma.shift.findMany({ where: { restaurantId, serviceDate }, select: { servers: { select: { serverId: true, coversServed: true } } } }),
   ]);
 
@@ -183,6 +183,48 @@ export async function getShiftIntel(restaurantId: string, date: string): Promise
   const activeServers = roster ? servers.filter((server) => rosterIds.has(server.id)) : servers.filter((server) => server.onShift);
   const served = shifts.flatMap((shift) => shift.servers).reduce((sum, row) => sum + row.coversServed, 0);
   const staffingCapacity = activeServers.length ? Math.round(expected / activeServers.length) : null;
+  const sectionMap = roster?.sections && typeof roster.sections === "object" && !Array.isArray(roster.sections)
+    ? roster.sections as Record<string, string>
+    : {};
+  const activeServerIds = new Set(activeServers.map((server) => server.id));
+  const assignedTables = tables.flatMap((table) => {
+    const serverId = sectionMap[String(table.id)];
+    return serverId && activeServerIds.has(serverId) ? [{ ...table, serverId }] : [];
+  });
+  const assignmentBasis = assignedTables.length ? "assigned" : "unassigned";
+  const perServerRaw = new Map(activeServers.map((server) => [server.id, { covers: 0, tables: 0, seats: 0, zones: new Set<string>() }]));
+  let unassignedExpectedCovers = 0;
+  if (assignmentBasis === "assigned") {
+    for (const section of sections) {
+      const sectionTables = assignedTables.filter((table) => (table.area || "dining") === section.zone);
+      const assignedSeats = sectionTables.reduce((sum, table) => sum + table.capacity, 0);
+      if (!assignedSeats) {
+        unassignedExpectedCovers += section.expectedCovers;
+        continue;
+      }
+      for (const table of sectionTables) {
+        const load = perServerRaw.get(table.serverId)!;
+        load.covers += section.expectedCovers * table.capacity / assignedSeats;
+        load.tables += 1;
+        load.seats += table.capacity;
+        load.zones.add(section.zone);
+      }
+    }
+  } else if (activeServers.length) {
+    for (const server of activeServers) perServerRaw.get(server.id)!.covers = expected / activeServers.length;
+  }
+  const perServer = activeServers.map((server) => {
+    const load = perServerRaw.get(server.id)!;
+    return {
+      serverId: server.id,
+      name: server.name,
+      projectedCovers: Math.round(load.covers),
+      assignedTables: load.tables,
+      assignedSeats: load.seats,
+      zones: [...load.zones].sort(),
+      basis: assignmentBasis,
+    };
+  }).sort((a, b) => b.projectedCovers - a.projectedCovers || a.name.localeCompare(b.name));
   const lastTableOutMinutes = lastOuts.length ? Math.round(mean(lastOuts)) : null;
   const value: Dossier = {
     date: shiftDate, closed,
@@ -192,7 +234,7 @@ export async function getShiftIntel(restaurantId: string, date: string): Promise
     sections, hourly,
     turns: { observedMinutes: observedTurn, defaultMinutes: defaultTurn, effectiveMinutes: observedTurn || defaultTurn, sampleCount: turns.length },
     lastTableOut: { typicalMinutes: lastTableOutMinutes, typical: lastTableOutMinutes == null ? null : toTimeStr(new Date(2000, 0, 1, Math.floor(lastTableOutMinutes / 60), lastTableOutMinutes % 60)), sampleCount: lastOuts.length },
-    staffing: { rosteredServers: activeServers.length, expectedCoversPerServer: staffingCapacity, recordedCoversToday: served || 0 },
+    staffing: { rosteredServers: activeServers.length, expectedCoversPerServer: staffingCapacity, recordedCoversToday: served || 0, assignmentBasis, unassignedExpectedCovers: Math.round(unassignedExpectedCovers), perServer },
     history: { serviceDays: serviceDays.length, sameWeekdayDays: sameWeekday.length },
   };
   aggregateCache.set(cacheKey, { value, expiresAt: Date.now() + CACHE_MS });

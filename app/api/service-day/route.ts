@@ -9,6 +9,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRestaurantId } from "@/lib/tenant";
 import { serviceDateOf, todayKey } from "@/lib/db-mappers";
+import { invalidateShiftIntel } from "@/lib/shift-intel";
 
 const dateParam = (req: Request) => {
   const raw = new URL(req.url).searchParams.get("date");
@@ -58,6 +59,7 @@ export async function PUT(req: Request) {
       create: { restaurantId, serviceDate: serviceDateOf(dateKey), roster, sections },
       update: { roster, sections },
     });
+    invalidateShiftIntel(restaurantId, dateKey);
     return Response.json({ ok: true, date: dateKey });
   } catch (err) {
     console.error("[api/service-day PUT]", err);

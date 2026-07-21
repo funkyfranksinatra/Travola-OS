@@ -112,7 +112,7 @@ export async function POST(req: Request) {
     const workerSpecs = [
       ["demand", "Assess forecast confidence, weather/events drivers already present in the forecast, and service-volume watchouts."],
       ["book", "Assess reservations only: regulars/VIPs, large parties, timing clusters, and booking-specific pacing risks."],
-      ["staffing", "Assess roster/section capacity versus expected load. Recommend only from the supplied roster and forecast."],
+      ["staffing", "Assess roster and section capacity versus expected load. Use shiftIntel.staffing.perServer for any server-level load statement; its assignmentBasis tells you whether the load is section-derived or only an unassigned even-split fallback. Recommend only from the supplied snapshot."],
     ] as const;
     const settled = await Promise.allSettled(workerSpecs.map(([name, instruction]) => runWorker(name, instruction, snapshot)));
     const reports = settled.map((result, index) => result.status === "fulfilled"
@@ -129,7 +129,7 @@ export async function POST(req: Request) {
         store: false,
         reasoning: { effort: "low", context: "current_turn" },
         text: { format: { type: "json_schema", name: "tonights_game_plan", strict: true, schema: BRIEFING_SCHEMA } },
-        instructions: "You are Travola's pre-shift briefing editor. Synthesize a concrete, read-aloud game plan from the restaurant snapshot and the completed parallel Luna workstreams. Do not invent weather, events, guests, history, or staffing facts. Failed workstreams must simply degrade their sections; never return a blank briefing. Say 'not enough history yet' where appropriate. Keep each list item concise.",
+        instructions: "You are Travola's pre-shift briefing editor. Synthesize a concrete, read-aloud game plan from the restaurant snapshot and the completed parallel Luna workstreams. Do not invent weather, events, guests, history, or staffing facts. For server-level staffing observations, use only shiftIntel.staffing.perServer and preserve its assignmentBasis. Failed workstreams must simply degrade their sections; never return a blank briefing. Say 'not enough history yet' where appropriate. Keep each list item concise.",
         input: JSON.stringify({ snapshot, reports: reports.map(({ name, report, ok }) => ({ name, report, ok })) }),
       });
       synthesisUsage = usage(synthesis, "terra");
