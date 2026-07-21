@@ -10120,7 +10120,7 @@ export default function Home({ hostMode = false } = {}) {
         </div>
       )}
       <Header now={now} activeTab={activeTab} setActiveTab={setActiveTab} occupancy={occupancy} coversToday={serviceLog ? serviceLog.covers.total : null} onOpenService={() => setActiveTab('service')} hostMode={hostMode} onReplayTips={hostMode ? replayFeatureTour : null} onSignOut={hostMode ? () => setSignOutConfirm(true) : null} />
-      <Copilot suppressed={copilotSuppressed} floorEvent={copilotFloorEvent} />
+      <Copilot suppressed={copilotSuppressed} floorEvent={copilotFloorEvent} today={todayStr} viewDate={viewDateStr} />
       {featureTourEligible && tourMutex === 'feature' && featureTour && (
         <TourOverlay
           steps={activeFeatureTourSteps}

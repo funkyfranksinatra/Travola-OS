@@ -1,11 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { getForecastCache } from "@/lib/forecast-cache";
-import { serviceDateOf, toTimeStr, todayKey } from "@/lib/db-mappers";
+import { dateKeyOfService, dayOfWeekOf, serviceDateOf, toTimeStr, todayKey } from "@/lib/db-mappers";
 
 const DINING_WINDOW_MINS = 90;
 
 const minutes = (date: Date) => date.getHours() * 60 + date.getMinutes();
 const ageMinutes = (date: Date | null, now = Date.now()) => date ? Math.max(0, Math.round((now - date.getTime()) / 60000)) : null;
+const DATE_KEY = /^\d{4}-\d{2}-\d{2}$/;
+const dateOrToday = (value?: string) => DATE_KEY.test(String(value || "")) ? String(value) : todayKey();
+const timeLabel = (minutes: number | null | undefined) => minutes == null ? "not set" : toTimeStr(new Date(2000, 0, 1, Math.floor(minutes / 60), minutes % 60));
 
 /**
  * Every helper in this file receives the restaurant id from a verified
@@ -29,17 +32,20 @@ export async function getFloorState(restaurantId: string) {
   };
 }
 
-export async function getReservations(restaurantId: string) {
-  const today = serviceDateOf(todayKey());
+export async function getReservations(restaurantId: string, date?: string) {
+  const dateKey = dateOrToday(date);
+  const serviceDate = serviceDateOf(dateKey);
+  const currentDay = dateKey === todayKey();
   const rows = await prisma.reservation.findMany({
-    where: { restaurantId, serviceDate: today, status: { in: ["UPCOMING", "PARTIALLY_ARRIVED", "SEATED"] } },
-    include: { guest: { select: { name: true, vip: true } }, tables: { select: { tableId: true, isPrimary: true } } },
+    where: { restaurantId, serviceDate, ...(currentDay ? { status: { in: ["UPCOMING", "PARTIALLY_ARRIVED", "SEATED"] } } : {}) },
+    include: { guest: { select: { name: true, vip: true } }, tables: { include: { table: { select: { area: true } } } } },
     orderBy: { targetTime: "asc" },
   });
   return rows.map((row) => ({
     id: row.id, name: row.guest.name, partySize: row.partySize, status: row.status, vip: row.vip || row.guest.vip,
     time: toTimeStr(row.targetTime), targetAt: row.targetTime.toISOString(), seatedMinutes: ageMinutes(row.seatedTime),
     tableIds: row.tables.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary)).map((table) => table.tableId),
+    zones: [...new Set(row.tables.map((table) => table.table.area).filter(Boolean))],
   }));
 }
 
@@ -51,12 +57,13 @@ export async function getWaitlist(restaurantId: string) {
   return rows.map((row) => ({ id: row.id, name: row.name, partySize: row.partySize, waitingMinutes: ageMinutes(row.arrivalTime), quotedMinutes: row.quotedMinutes, status: row.status }));
 }
 
-export async function getRoster(restaurantId: string) {
-  const today = serviceDateOf(todayKey());
+export async function getRoster(restaurantId: string, date?: string) {
+  const dateKey = dateOrToday(date);
+  const serviceDate = serviceDateOf(dateKey);
   const [day, servers, shift] = await Promise.all([
-    prisma.serviceDayStaff.findUnique({ where: { restaurantId_serviceDate: { restaurantId, serviceDate: today } } }),
+    prisma.serviceDayStaff.findUnique({ where: { restaurantId_serviceDate: { restaurantId, serviceDate } } }),
     prisma.server.findMany({ where: { restaurantId, active: true }, select: { id: true, name: true, onShift: true, aiExcluded: true } }),
-    prisma.shift.findFirst({ where: { restaurantId, serviceDate: today }, include: { servers: { select: { serverId: true, coversServed: true, tablesWorked: true } } }, orderBy: { updatedAt: "desc" } }),
+    prisma.shift.findFirst({ where: { restaurantId, serviceDate }, include: { servers: { select: { serverId: true, coversServed: true, tablesWorked: true } } }, orderBy: { updatedAt: "desc" } }),
   ]);
   const byServer = new Map((shift?.servers || []).map((row) => [row.serverId, row]));
   const dayRoster = new Set((day?.roster || []).map((id) => String(id).replace(/^bar:/, "")));
@@ -66,10 +73,11 @@ export async function getRoster(restaurantId: string) {
   });
 }
 
-export async function getServiceLog(restaurantId: string) {
-  const today = serviceDateOf(todayKey());
+export async function getServiceLog(restaurantId: string, date?: string) {
+  const dateKey = dateOrToday(date);
+  const serviceDate = serviceDateOf(dateKey);
   const rows = await prisma.reservation.findMany({
-    where: { restaurantId, serviceDate: today, status: { in: ["SEATED", "FINISHED"] } },
+    where: { restaurantId, serviceDate, status: { in: ["SEATED", "FINISHED"] } },
     include: { guest: { select: { name: true } }, tables: { select: { tableId: true } } },
     orderBy: { seatedTime: "desc" },
     take: 80,
@@ -82,11 +90,40 @@ export async function getServiceLog(restaurantId: string) {
   };
 }
 
-export function getCachedForecast(restaurantId: string) {
-  const date = todayKey();
-  const forecast = getForecastCache(restaurantId, date);
-  if (!forecast) return { available: false, date, reason: "No cached forecast yet. Open Predictor to refresh it; co-pilot will not trigger web research." };
-  return { available: true, date, forecast };
+export function getCachedForecast(restaurantId: string, date?: string) {
+  const dateKey = dateOrToday(date);
+  const forecast = getForecastCache(restaurantId, dateKey);
+  if (!forecast) return { available: false, date: dateKey, reason: "No cached forecast for that date. Open Predictor to refresh it; co-pilot will not trigger web research." };
+  return { available: true, date: dateKey, forecast };
+}
+
+/** Historical daily ground truth from finalized shifts, with recorded party data as a fallback. */
+export async function getHistory(restaurantId: string, from?: string, to?: string) {
+  const end = dateOrToday(to);
+  const start = DATE_KEY.test(String(from || "")) ? String(from) : end;
+  const [low, high] = start <= end ? [start, end] : [end, start];
+  const range = { gte: serviceDateOf(low), lte: serviceDateOf(high) };
+  const [shifts, reservations] = await Promise.all([
+    prisma.shift.findMany({ where: { restaurantId, serviceDate: range }, select: { serviceDate: true, actualCovers: true, avgTurnMinutes: true, totalReservations: true, totalWalkIns: true, isFinalized: true } }),
+    prisma.reservation.groupBy({ where: { restaurantId, serviceDate: range, status: { in: ["SEATED", "FINISHED"] } }, by: ["serviceDate"], _sum: { partySize: true, turnMinutes: true }, _avg: { turnMinutes: true }, _count: { id: true } }),
+  ]);
+  const byDate = new Map<string, any>();
+  for (const shift of shifts) byDate.set(dateKeyOfService(shift.serviceDate), { date: dateKeyOfService(shift.serviceDate), covers: shift.actualCovers || null, avgTurnMinutes: shift.avgTurnMinutes == null ? null : Math.round(shift.avgTurnMinutes), reservations: shift.totalReservations, walkIns: shift.totalWalkIns, finalized: shift.isFinalized, source: "shift" });
+  for (const row of reservations) {
+    const key = dateKeyOfService(row.serviceDate);
+    const previous = byDate.get(key);
+    byDate.set(key, { date: key, covers: previous?.covers || row._sum.partySize || 0, avgTurnMinutes: previous?.avgTurnMinutes ?? (row._avg.turnMinutes == null ? null : Math.round(row._avg.turnMinutes)), reservations: previous?.reservations ?? row._count.id, walkIns: previous?.walkIns ?? 0, finalized: previous?.finalized ?? false, source: previous ? "shift" : "recorded_parties" });
+  }
+  return { from: low, to: high, days: [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)), message: byDate.size ? undefined : "No recorded history for that date range." };
+}
+
+export async function getCopilotSchedule(restaurantId: string, viewDate: string) {
+  const settings = await prisma.restaurantSettings.findUnique({ where: { restaurantId }, select: { openMinutes: true, closeMinutes: true, prefs: true } });
+  const prefs = (settings?.prefs || {}) as Record<string, unknown>;
+  const daysOpen = Array.isArray(prefs.daysOpen) && prefs.daysOpen.length === 7 ? prefs.daysOpen.map(Boolean) : [true, true, true, true, true, true, true];
+  const weekday = dayOfWeekOf(viewDate);
+  const baseline = prefs.baseline && typeof prefs.baseline === "object" ? prefs.baseline : null;
+  return { viewDate, weekday, isOpen: daysOpen[weekday], daysOpen, hours: { openMinutes: settings?.openMinutes ?? null, closeMinutes: settings?.closeMinutes ?? null, opening: timeLabel(settings?.openMinutes), closing: timeLabel(settings?.closeMinutes) }, baseline };
 }
 
 /** Same availability, hold-window, capacity, merge-adjacency and load rules as the seating route, exposed read-only. */
