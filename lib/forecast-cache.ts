@@ -1,23 +1,23 @@
-// A deliberately small, process-local cache of completed predictor output.
-// Co-pilot may read this only; it must never wake the web-research pipeline.
-type CachedForecast = { value: unknown; expiresAt: number };
+// Durable predictor output store. The legacy module name is intentionally
+// retained so read-only consumers cannot accidentally wake live research.
+import { prisma } from "@/lib/prisma";
 
-const forecasts = new Map<string, CachedForecast>();
-const TTL_MS = 30 * 60 * 1000;
+export type ForecastSource = "manual" | "weekly" | "autocorrect";
 
-const keyFor = (restaurantId: string, date: string) => `${restaurantId}:${date}`;
-
-export function putForecastCache(restaurantId: string, date: string, value: unknown) {
-  forecasts.set(keyFor(restaurantId, date), { value, expiresAt: Date.now() + TTL_MS });
+export async function putForecastCache(restaurantId: string, date: string, value: unknown, source: ForecastSource = "manual") {
+  return prisma.shiftForecast.upsert({
+    where: { restaurantId_date: { restaurantId, date } },
+    create: { restaurantId, date, source, payload: value as object },
+    update: { source, payload: value as object, createdAt: new Date() },
+  });
 }
 
-export function getForecastCache(restaurantId: string, date: string) {
-  const key = keyFor(restaurantId, date);
-  const hit = forecasts.get(key);
-  if (!hit) return null;
-  if (hit.expiresAt <= Date.now()) {
-    forecasts.delete(key);
-    return null;
-  }
-  return hit.value;
+export async function getStoredForecast(restaurantId: string, date: string) {
+  const row = await prisma.shiftForecast.findUnique({ where: { restaurantId_date: { restaurantId, date } } });
+  return row ? { payload: row.payload, source: row.source as ForecastSource, createdAt: row.createdAt } : null;
+}
+
+export async function getForecastCache(restaurantId: string, date: string) {
+  const hit = await getStoredForecast(restaurantId, date);
+  return hit?.payload ?? null;
 }

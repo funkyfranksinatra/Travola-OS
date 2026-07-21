@@ -8226,6 +8226,14 @@ export default function Home({ hostMode = false } = {}) {
   const viewingPast = viewDateStr < todayStr;
   const viewingFuture = viewDateStr > todayStr;
 
+  // Future-date navigation warms only the deterministic shift dossier. It
+  // does not call Predictor or web research, so co-pilot planning answers
+  // are instant without creating surprise model cost.
+  useEffect(() => {
+    if (!hydrated || !viewingFuture) return;
+    fetch(`/api/shift-intel?date=${encodeURIComponent(viewDateStr)}`).catch(() => {});
+  }, [hydrated, viewingFuture, viewDateStr]);
+
   // ─── First-visit feature tips ──────────────────────────────────────
   // This deliberately sits after `now`: tour setup derives its demo
   // reservation date from the same clock as the floor, avoiding a TDZ

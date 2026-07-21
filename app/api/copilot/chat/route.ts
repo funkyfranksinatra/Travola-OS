@@ -2,7 +2,7 @@
 import OpenAI from "openai";
 import { COPILOT_MODEL } from "@/lib/ai-models";
 import { requireRestaurantId } from "@/lib/tenant";
-import { getCachedForecast, getCopilotSchedule, getFloorState, getHistory, getReservations, getRoster, getServiceLog, getWaitlist, suggestSeating } from "@/lib/copilot-data";
+import { getCachedForecast, getCopilotSchedule, getFloorState, getHistory, getReservations, getRoster, getServiceLog, getShiftOutlook, getWaitlist, suggestSeating } from "@/lib/copilot-data";
 import { getFeatureGuide } from "@/lib/feature-guide";
 import { todayKey } from "@/lib/db-mappers";
 
@@ -35,6 +35,7 @@ const tools = [
   readTool("get_roster", "Read the viewed date's planned/on-shift roster and per-server covers and tables worked. Optional date defaults to viewDate.", dateParameters),
   readTool("get_service_log", "Read the viewed date's seated and finished parties and observed turn-time history. Optional date defaults to viewDate.", dateParameters),
   readTool("get_history", "Read recorded daily covers and turn aggregates for a date range. Use for past-date and last-year comparisons; it returns an explicit no-data result when history is absent. Use null for either bound to default to viewDate.", { type: "object", properties: { from: { type: ["string", "null"], description: "YYYY-MM-DD inclusive, or null" }, to: { type: ["string", "null"], description: "YYYY-MM-DD inclusive, or null" } }, required: ["from", "to"], additionalProperties: false }),
+  readTool("get_shift_outlook", "Read the deterministic shift-intelligence dossier for a date: expected covers, source, booked/walk-in split, section fill order, hourly volume, turns, close norm, and staffing capacity. Use for all volume, staffing, planning, and comparison questions. It never triggers web research.", dateParameters),
   readTool("get_forecast", "Read an already-cached predictor result for a date. It never starts predictor research; if absent, say so.", dateParameters),
   readTool("get_feature_guide", "Read the versioned Travola feature guide. Use this for any how-to or how-does-it-work question; call with topic 'list' to inspect the topic index, then a matching topic. Never invent a UI path.", { type: "object", properties: { topic: { type: ["string", "null"], description: "Guide topic, alias, 'list', or null for the topic index." } }, required: ["topic"], additionalProperties: false }),
   readTool("suggest_seating", "Read-only seating recommendation using the existing seater's deterministic availability, reservation hold, capacity, merge, and load constraints. This does not seat anyone.", {
@@ -46,8 +47,9 @@ const tools = [
 // scoped definition is used only for the server-enforced fallback below:
 // it guarantees a party-fit answer has an actual deterministic seat check.
 const forcedSeatTool = { ...tools.find((tool: any) => tool.name === "suggest_seating"), allowed_callers: ["direct"] };
+const forcedOutlookTool = { ...tools.find((tool: any) => tool.name === "get_shift_outlook"), allowed_callers: ["direct"] };
 
-const systemFor = (context: any) => `You are Travola's concise floor-manager co-pilot. You are co-pilot, not autopilot: advise only and never imply an action was taken. Use numbers before prose. Answer only from read-only tool data; use the relevant tools before answering. Today is ${context.today}; the restaurant is viewing ${context.viewDate}. Schedule for that viewed date: ${context.schedule.isOpen ? "OPEN" : "CLOSED"}; regular hours ${context.schedule.hours.opening}–${context.schedule.hours.closing}; days-open Sunday-first=${JSON.stringify(context.schedule.daysOpen)}; owner baseline=${JSON.stringify(context.schedule.baseline)}. If viewDate is in the past, analyze recorded history. If it is future, plan from that date's reservations, cached forecast, same-weekday history, and the owner baseline when present; state uncertainty. If the viewed day is closed, say so plainly. For last-year/comparative questions use get_history and get_forecast; never trigger live predictor research, and if no cached forecast exists say so and suggest running Predictor. For any question about whether or where a party can fit, always call suggest_seating as well as the relevant current-floor, reservation, or waitlist reads. For every how-to or feature-behavior question, call get_feature_guide and answer only from its guide text; if no entry exists, say so. If date data is missing, say "no data for that date" plainly. Keep answers practical and short. Never invent a table, party, server, forecast, booking, or UI path.`;
+const systemFor = (context: any) => `You are Travola's concise floor-manager co-pilot. You are co-pilot, not autopilot: advise only and never imply an action was taken. Use numbers before prose. Answer only from read-only tool data; use the relevant tools before answering. Today is ${context.today}; the restaurant is viewing ${context.viewDate}. Schedule for that viewed date: ${context.schedule.isOpen ? "OPEN" : "CLOSED"}; regular hours ${context.schedule.hours.opening}–${context.schedule.hours.closing}; days-open Sunday-first=${JSON.stringify(context.schedule.daysOpen)}; owner baseline=${JSON.stringify(context.schedule.baseline)}. If viewDate is in the past, analyze recorded history. If it is future, plan from that date's reservations, cached forecast, same-weekday history, and the owner baseline when present; state uncertainty. If the viewed day is closed, say so plainly. For every volume, staffing, section-load, planning, or comparison question, always call get_shift_outlook first; it is the shared deterministic source of truth. If its source is model, say a full Predictor run adds research-grade external factors. For last-year/comparative questions also use get_history and get_forecast; never trigger live predictor research, and if no cached forecast exists say so and suggest running Predictor. For any question about whether or where a party can fit, always call suggest_seating as well as the relevant current-floor, reservation, or waitlist reads. For every how-to or feature-behavior question, call get_feature_guide and answer only from its guide text; if no entry exists, say so. If date data is missing, say "no data for that date" plainly. Keep answers practical and short. Never invent a table, party, server, forecast, booking, or UI path.`;
 
 const cleanMessages = (body: unknown) => Array.isArray((body as { messages?: unknown[] })?.messages)
   ? (body as { messages: unknown[] }).messages.slice(-24).flatMap((item) => {
@@ -80,6 +82,10 @@ function featureHelpIntent(text: string) {
   return /\b(how\s+(?:do|does|can)|where\s+(?:do|can)|what\s+does|help\s+(?:me\s+)?with)\b/i.test(text);
 }
 
+function outlookIntent(text: string) {
+  return /\b(volume|covers?|busy|busiest|slam(?:med)?|staff(?:ing)?|server(?:s)?|section(?:s)?|plan(?:ning)?|forecast|expect(?:ed|ing)?|more|less|compare|comparison|walk[ -]?ins?|turn(?:s|ing)?)\b/i.test(text);
+}
+
 async function runTool(restaurantId: string, call: any, viewDate: string) {
   let args: Record<string, unknown> = {};
   try { args = JSON.parse(call.arguments || "{}"); } catch { return { error: "invalid_tool_arguments" }; }
@@ -90,6 +96,7 @@ async function runTool(restaurantId: string, call: any, viewDate: string) {
     case "get_roster": return getRoster(restaurantId, validDate(args.date, viewDate));
     case "get_service_log": return getServiceLog(restaurantId, validDate(args.date, viewDate));
     case "get_history": return getHistory(restaurantId, validDate(args.from, viewDate), validDate(args.to, viewDate));
+    case "get_shift_outlook": return getShiftOutlook(restaurantId, validDate(args.date, viewDate));
     case "get_forecast": return getCachedForecast(restaurantId, validDate(args.date, viewDate));
     case "get_feature_guide": return getFeatureGuide(typeof args.topic === "string" ? args.topic : "list");
     case "suggest_seating": return suggestSeating(restaurantId, Number(args.partySize));
@@ -124,6 +131,7 @@ export async function POST(req: Request) {
   const context = { today, viewDate, schedule };
   const system = systemFor(context);
   const fitIntent = fitIntentPartySize(question);
+  const needsOutlook = outlookIntent(question);
   if (fitIntent.asksFit && !fitIntent.partySize) {
     return Response.json({
       answer: "What party size should I check? I won't guess a seating recommendation.",
@@ -171,6 +179,27 @@ export async function POST(req: Request) {
       if (forcedCall) {
         calledTools.push("suggest_seating");
         outputs.push({ tool: "suggest_seating", data: await runTool(auth.restaurantId, forcedCall, viewDate) });
+      }
+    }
+    // Volume answers must use the same deterministic dossier as briefing and
+    // sentry. Prompt instructions are helpful, but this server-side round is
+    // the binding guarantee when the tool planner omits it.
+    if (needsOutlook && !calledTools.includes("get_shift_outlook")) {
+      const forced = await client.responses.create({
+        model: COPILOT_MODEL,
+        instructions: "Call get_shift_outlook for the viewed date. Do not answer prose.",
+        input: messages[messages.length - 1].content,
+        tools: [forcedOutlookTool],
+        tool_choice: { type: "function", name: "get_shift_outlook" },
+        store: false,
+        reasoning: { effort: "low", context: "current_turn" },
+      });
+      usage = usageOf(forced);
+      Object.keys(allUsage).forEach((key) => { allUsage[key] += usage[key]; });
+      const forcedCall = (forced.output || []).find((item: any) => item.type === "function_call" && item.name === "get_shift_outlook");
+      if (forcedCall) {
+        calledTools.push("get_shift_outlook");
+        outputs.push({ tool: "get_shift_outlook", data: await runTool(auth.restaurantId, forcedCall, viewDate) });
       }
     }
     if (outputs.length) {

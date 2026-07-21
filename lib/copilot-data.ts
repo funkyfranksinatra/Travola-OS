@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getForecastCache } from "@/lib/forecast-cache";
+import { getShiftIntel } from "@/lib/shift-intel";
 import { dateKeyOfService, dayOfWeekOf, serviceDateOf, toTimeStr, todayKey } from "@/lib/db-mappers";
 
 const DINING_WINDOW_MINS = 90;
@@ -90,11 +91,16 @@ export async function getServiceLog(restaurantId: string, date?: string) {
   };
 }
 
-export function getCachedForecast(restaurantId: string, date?: string) {
+export async function getCachedForecast(restaurantId: string, date?: string) {
   const dateKey = dateOrToday(date);
-  const forecast = getForecastCache(restaurantId, dateKey);
+  const forecast = await getForecastCache(restaurantId, dateKey);
   if (!forecast) return { available: false, date: dateKey, reason: "No cached forecast for that date. Open Predictor to refresh it; co-pilot will not trigger web research." };
   return { available: true, date: dateKey, forecast };
+}
+
+export async function getShiftOutlook(restaurantId: string, date?: string) {
+  const dateKey = dateOrToday(date);
+  return getShiftIntel(restaurantId, dateKey);
 }
 
 /** Historical daily ground truth from finalized shifts, with recorded party data as a fallback. */
@@ -161,9 +167,10 @@ export async function suggestSeating(restaurantId: string, partySize: number) {
 }
 
 export async function getSentrySnapshot(restaurantId: string) {
-  const [floor, waitlist, reservations, roster, serviceLog] = await Promise.all([
+  const [floor, waitlist, reservations, roster, serviceLog, shiftIntel] = await Promise.all([
     getFloorState(restaurantId), getWaitlist(restaurantId), getReservations(restaurantId), getRoster(restaurantId), getServiceLog(restaurantId),
+    getShiftIntel(restaurantId, todayKey()),
   ]);
   const seated = floor.tables.filter((table) => table.status === "seated" || table.status === "dining");
-  return { generatedAt: new Date().toISOString(), floor: floor.summary, seated, waiting: waitlist, upcoming: reservations.filter((reservation) => reservation.status !== "SEATED").slice(0, 12), roster, averageTurnMinutes: serviceLog.averageTurnMinutes };
+  return { generatedAt: new Date().toISOString(), floor: floor.summary, seated, waiting: waitlist, upcoming: reservations.filter((reservation) => reservation.status !== "SEATED").slice(0, 12), roster, averageTurnMinutes: serviceLog.averageTurnMinutes, shiftIntel };
 }

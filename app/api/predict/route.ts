@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRestaurantId } from "@/lib/tenant";
 import { RESEARCH_MODEL } from "@/lib/ai-models";
 import { putForecastCache } from "@/lib/forecast-cache";
+import { invalidateShiftIntel } from "@/lib/shift-intel";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 
@@ -311,7 +312,8 @@ export async function POST(req: Request) {
         turn: { minutes: 0, source: "closed" }, lastTableOut: "", capacity: { seats: 0, tables: 0 }, sections: [], staffing: { crew: 0, crewMethod: "closed", coversPerServer: null, historicalCoversPerServer: null, verdict: "unknown", addServers: 0 },
         factors: { used: [{ key: "closed", label: "Closed", detail: "owner schedule", impactPct: 0 }], excluded: [] },
       };
-      putForecastCache(restaurantId, target, closedForecast);
+      await putForecastCache(restaurantId, target, closedForecast, "manual");
+      invalidateShiftIntel(restaurantId, target);
       return Response.json(closedForecast);
     }
     const locName = (locPref.name || process.env.RESTAURANT_NAME || "").trim() || undefined;
@@ -701,7 +703,8 @@ export async function POST(req: Request) {
       staffing: { crew, crewMethod, coversPerServer, historicalCoversPerServer: perServerHist > 0 ? Math.round(perServerHist) : null, verdict: staffingVerdict, addServers: staffingDelta },
       factors: { used: usedFactors, excluded: excludedFactors },
     };
-    putForecastCache(restaurantId, target, forecast);
+    await putForecastCache(restaurantId, target, forecast, "manual");
+    invalidateShiftIntel(restaurantId, target);
     return Response.json(forecast);
   } catch (err) {
     console.error("[api/predict]", err);

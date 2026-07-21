@@ -19,9 +19,11 @@ Required environment variables:
 DATABASE_URL="postgresql://..."
 SESSION_SECRET="a-long-random-secret"
 OPENAI_API_KEY="..."
+CRON_SECRET="a-separate-long-random-secret"
 ```
 
 `SESSION_SECRET` must be set for local development and for both Production and Preview in Vercel. Never reuse a development secret in production.
+`CRON_SECRET` authorizes the production weekly forecast and nightly accuracy-watchdog cron routes; set it in Vercel Production before enabling those schedules.
 
 Useful checks:
 
@@ -38,6 +40,7 @@ On Windows, stop the dev server before running Prisma generate or migrations so 
 - The AI is advisory. Geometry, parsing, assignment constraints, and forecast math remain deterministic.
 - `app/page.tsx` deliberately remains the application’s large client component. Tours use small anchors and notify calls instead of a page-wide refactor.
 - Forecast setup priors are bounded, deterministic inputs and are reported in forecast factors only while history is thin.
+- Shift Intelligence is a deterministic, tenant-scoped dossier shared by Predictor, co-pilot, briefing, and sentry. Its weekly research factor is bounded before it can affect per-day forecast math; the nightly watchdog is math-only.
 
 ## Built with Codex + GPT-5.6
 
