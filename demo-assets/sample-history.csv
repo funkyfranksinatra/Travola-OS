@@ -1,0 +1,914 @@
+Date,Time,Party Size,Guest Name,Status,Table,Server,Turn Time (min),Tags
+4/21/2026,6:45 PM,4,Brandt Party,Completed,9,Jules,98,
+4/21/2026,5:15 PM,4,Hayes Party,Completed,8,Priya,131,
+4/21/2026,6:00 PM,2,Brandt Party,Completed,7,Marco,78,
+4/21/2026,8:45 PM,2,Garcia Party,Completed,2,Dana,98,Birthday
+4/21/2026,6:00 PM,4,Smith Party,Completed,13,Priya,96,Regular
+4/21/2026,5:00 PM,3,Nguyen Party,Completed,8,Marco,98,
+4/22/2026,7:45 PM,3,Duval Party,Completed,9,Priya,94,
+4/22/2026,5:00 PM,4,Nguyen Party,Completed,11,Marco,92,Regular
+4/22/2026,7:00 PM,4,Marsh Party,Completed,2,Priya,102,VIP
+4/22/2026,7:45 PM,4,Brandt Party,Completed,11,Tom,89,
+4/22/2026,9:15 PM,2,Brandt Party,Completed,6,Jules,98,
+4/22/2026,6:15 PM,2,Fischer Party,Completed,8,Marco,73,
+4/22/2026,9:15 PM,3,Duval Party,Completed,7,Tom,88,
+4/23/2026,7:45 PM,3,Ortiz Party,Completed,5,Marco,93,
+4/23/2026,7:15 PM,3,Smith Party,Cancelled,2,Tom,,
+4/23/2026,7:15 PM,4,Brandt Party,No Show,5,Marco,,Birthday
+4/23/2026,8:15 PM,4,Ortiz Party,Completed,5,Tom,88,Regular
+4/23/2026,6:45 PM,4,Duval Party,Completed,9,Marco,77,VIP
+4/23/2026,6:15 PM,3,Smith Party,No Show,7,Tom,,Window request
+4/23/2026,5:15 PM,3,Ortiz Party,Completed,6,Marco,94,Regular
+4/23/2026,8:15 PM,2,Kim Party,Completed,7,Jules,104,
+4/23/2026,6:30 PM,4,Hayes Party,Completed,9,Marco,108,Regular
+4/24/2026,6:15 PM,3,Smith Party,Completed,12,Marco,87,Anniversary
+4/24/2026,6:45 PM,2,Brandt Party,Completed,8,Jules,104,
+4/24/2026,7:30 PM,4,Kim Party,Completed,6,Marco,93,
+4/24/2026,5:45 PM,2,Nguyen Party,Completed,3,Dana,89,Anniversary
+4/24/2026,6:30 PM,2,Marsh Party,Completed,1,Dana,122,
+4/24/2026,9:30 PM,3,Lee Party,No Show,5,Marco,,VIP
+4/24/2026,8:45 PM,3,Ortiz Party,Completed,11,Marco,75,
+4/24/2026,8:00 PM,4,Fischer Party,Completed,4,Priya,77,Birthday
+4/24/2026,6:30 PM,2,Marsh Party,Completed,5,Tom,103,Window request
+4/24/2026,8:00 PM,2,Marsh Party,Cancelled,6,Tom,,VIP
+4/24/2026,7:15 PM,2,Ortiz Party,Completed,5,Priya,91,
+4/24/2026,6:45 PM,4,Ortiz Party,Completed,9,Dana,118,
+4/24/2026,7:45 PM,4,Hayes Party,Completed,12,Dana,85,
+4/24/2026,5:30 PM,3,Ortiz Party,Completed,5,Dana,98,Window request
+4/24/2026,7:30 PM,3,Nguyen Party,Completed,10,Tom,87,Window request
+4/24/2026,6:30 PM,2,Brandt Party,Cancelled,11,Priya,,VIP
+4/25/2026,7:15 PM,2,Brandt Party,Completed,2,Priya,92,
+4/25/2026,9:15 PM,2,Duval Party,Completed,3,Dana,90,
+4/25/2026,5:00 PM,4,Okafor Party,Completed,2,Priya,93,Anniversary
+4/25/2026,6:00 PM,2,Duval Party,Completed,3,Marco,91,Window request
+4/25/2026,6:45 PM,2,Marsh Party,Completed,9,Jules,83,Anniversary
+4/25/2026,7:30 PM,4,Duval Party,Completed,5,Marco,95,Birthday
+4/25/2026,7:45 PM,5,Okafor Party,Cancelled,6,Dana,,Anniversary
+4/25/2026,5:30 PM,2,Okafor Party,Completed,6,Dana,97,Window request
+4/25/2026,7:45 PM,4,Hayes Party,Completed,10,Tom,87,VIP
+4/25/2026,6:00 PM,4,Garcia Party,Completed,11,Tom,94,
+4/25/2026,5:45 PM,4,Hayes Party,Completed,6,Jules,105,VIP
+4/25/2026,6:45 PM,2,Brandt Party,Completed,12,Marco,88,Anniversary
+4/25/2026,6:15 PM,2,Smith Party,Completed,7,Tom,83,
+4/25/2026,7:45 PM,2,Duval Party,Completed,9,Marco,65,VIP
+4/25/2026,7:00 PM,2,Brandt Party,Completed,13,Dana,101,
+4/25/2026,7:00 PM,4,Brandt Party,Cancelled,6,Priya,,Anniversary
+4/25/2026,8:00 PM,6,Marsh Party,Completed,1,Tom,93,Regular
+4/26/2026,9:15 PM,2,Fischer Party,Completed,12,Tom,92,
+4/26/2026,7:45 PM,2,Fischer Party,Completed,2,Marco,86,
+4/26/2026,6:15 PM,2,Garcia Party,Completed,7,Marco,86,
+4/26/2026,8:15 PM,8,Nguyen Party,Completed,9,Tom,106,Birthday
+4/26/2026,9:30 PM,2,Duval Party,Completed,5,Dana,93,VIP
+4/26/2026,9:45 PM,2,Fischer Party,Completed,1,Tom,105,Window request
+4/26/2026,7:30 PM,2,Hayes Party,No Show,11,Tom,,Birthday
+4/26/2026,5:45 PM,4,Ortiz Party,Completed,5,Marco,98,
+4/26/2026,7:15 PM,3,Garcia Party,Completed,2,Marco,86,VIP
+4/26/2026,8:30 PM,2,Duval Party,Completed,1,Marco,85,Anniversary
+4/26/2026,7:45 PM,4,Marsh Party,Completed,13,Dana,96,
+4/26/2026,7:15 PM,4,Kim Party,No Show,13,Tom,,Birthday
+4/28/2026,8:00 PM,4,Kim Party,Completed,5,Priya,79,
+4/28/2026,7:15 PM,4,Fischer Party,Completed,6,Marco,94,
+4/28/2026,8:15 PM,5,Brandt Party,Completed,7,Priya,100,
+4/28/2026,6:15 PM,5,Ortiz Party,Completed,13,Dana,72,Birthday
+4/28/2026,7:30 PM,2,Hayes Party,Completed,1,Jules,96,Regular
+4/28/2026,7:00 PM,4,Smith Party,Completed,9,Dana,75,Birthday
+4/29/2026,5:15 PM,5,Marsh Party,Completed,4,Jules,95,VIP
+4/29/2026,5:00 PM,6,Okafor Party,Completed,4,Tom,80,Regular
+4/29/2026,5:15 PM,4,Hayes Party,Completed,10,Marco,98,
+4/29/2026,8:00 PM,3,Fischer Party,Completed,1,Priya,84,
+4/29/2026,5:00 PM,4,Okafor Party,Completed,7,Jules,66,Anniversary
+4/29/2026,7:15 PM,5,Hayes Party,Completed,3,Tom,100,Regular
+4/29/2026,9:45 PM,4,Fischer Party,Completed,5,Jules,65,Birthday
+4/29/2026,8:00 PM,2,Okafor Party,Completed,7,Jules,86,
+4/29/2026,7:00 PM,2,Ortiz Party,Cancelled,10,Priya,,
+4/30/2026,6:15 PM,4,Nguyen Party,Completed,3,Marco,90,Anniversary
+4/30/2026,6:45 PM,8,Ortiz Party,Completed,11,Marco,64,VIP
+4/30/2026,5:30 PM,2,Marsh Party,Completed,7,Marco,103,Regular
+4/30/2026,9:30 PM,4,Okafor Party,Completed,12,Dana,93,
+4/30/2026,5:45 PM,8,Marsh Party,Cancelled,11,Marco,,VIP
+4/30/2026,6:15 PM,2,Garcia Party,Completed,4,Tom,73,
+4/30/2026,5:30 PM,2,Fischer Party,No Show,6,Marco,,
+4/30/2026,7:45 PM,4,Ortiz Party,Completed,8,Jules,95,VIP
+5/1/2026,8:45 PM,2,Kim Party,Completed,3,Tom,98,VIP
+5/1/2026,7:00 PM,2,Marsh Party,Completed,4,Marco,93,
+5/1/2026,5:00 PM,4,Nguyen Party,No Show,5,Priya,,
+5/1/2026,6:00 PM,4,Garcia Party,Completed,2,Marco,98,Anniversary
+5/1/2026,7:15 PM,2,Lee Party,Completed,8,Priya,101,Birthday
+5/1/2026,9:15 PM,4,Lee Party,Completed,10,Jules,85,VIP
+5/1/2026,7:30 PM,2,Brandt Party,Completed,8,Dana,96,
+5/1/2026,7:00 PM,4,Smith Party,Completed,3,Marco,90,Window request
+5/1/2026,5:30 PM,3,Lee Party,Completed,13,Marco,82,
+5/1/2026,8:00 PM,6,Lee Party,Completed,5,Jules,82,Birthday
+5/1/2026,9:15 PM,2,Lee Party,Completed,1,Priya,90,Anniversary
+5/1/2026,7:00 PM,3,Smith Party,Completed,4,Dana,87,VIP
+5/1/2026,6:15 PM,2,Garcia Party,Completed,2,Dana,74,Window request
+5/1/2026,6:00 PM,2,Kim Party,Completed,6,Tom,101,
+5/2/2026,6:00 PM,6,Nguyen Party,Cancelled,10,Priya,,
+5/2/2026,6:15 PM,2,Marsh Party,Completed,2,Marco,93,Window request
+5/2/2026,7:30 PM,4,Hayes Party,Completed,1,Tom,136,
+5/2/2026,7:45 PM,3,Okafor Party,Completed,7,Jules,103,Window request
+5/2/2026,7:45 PM,2,Garcia Party,Completed,10,Jules,83,VIP
+5/2/2026,7:30 PM,4,Duval Party,Completed,3,Priya,89,VIP
+5/2/2026,7:45 PM,3,Marsh Party,Completed,9,Dana,98,Birthday
+5/2/2026,7:30 PM,4,Kim Party,Completed,10,Marco,89,
+5/2/2026,7:30 PM,2,Duval Party,Cancelled,1,Dana,,Anniversary
+5/2/2026,7:15 PM,4,Hayes Party,Completed,5,Priya,74,
+5/2/2026,7:30 PM,3,Lee Party,Completed,7,Marco,113,
+5/2/2026,7:15 PM,5,Garcia Party,Completed,7,Priya,73,Birthday
+5/2/2026,5:15 PM,2,Garcia Party,Completed,7,Dana,63,
+5/2/2026,6:45 PM,2,Ortiz Party,Completed,8,Priya,102,
+5/2/2026,6:00 PM,2,Brandt Party,Completed,8,Priya,91,
+5/2/2026,7:00 PM,2,Hayes Party,Completed,13,Jules,92,Window request
+5/2/2026,7:00 PM,2,Smith Party,Completed,4,Tom,96,
+5/2/2026,5:00 PM,2,Lee Party,Completed,13,Marco,98,Anniversary
+5/2/2026,7:15 PM,2,Ortiz Party,Completed,2,Tom,97,
+5/3/2026,5:30 PM,2,Duval Party,Completed,8,Dana,105,Anniversary
+5/3/2026,9:30 PM,6,Duval Party,Completed,12,Jules,95,Anniversary
+5/3/2026,5:45 PM,6,Brandt Party,Completed,11,Priya,87,Window request
+5/3/2026,9:15 PM,2,Nguyen Party,Completed,8,Priya,104,
+5/3/2026,5:30 PM,8,Duval Party,Completed,11,Marco,76,
+5/3/2026,6:45 PM,3,Kim Party,Completed,2,Priya,103,Window request
+5/3/2026,8:45 PM,3,Kim Party,Completed,1,Tom,68,
+5/3/2026,6:45 PM,5,Lee Party,Completed,8,Dana,104,
+5/3/2026,7:15 PM,3,Fischer Party,Completed,4,Marco,104,Window request
+5/3/2026,7:45 PM,2,Fischer Party,Completed,1,Priya,110,
+5/3/2026,8:15 PM,5,Garcia Party,No Show,12,Priya,,
+5/3/2026,6:00 PM,3,Duval Party,Completed,4,Dana,90,VIP
+5/3/2026,7:15 PM,2,Smith Party,Completed,5,Jules,94,Anniversary
+5/3/2026,8:15 PM,5,Hayes Party,Completed,11,Priya,79,Anniversary
+5/5/2026,6:45 PM,2,Kim Party,Completed,10,Dana,82,Birthday
+5/5/2026,6:45 PM,3,Marsh Party,Completed,1,Jules,83,VIP
+5/5/2026,7:00 PM,4,Garcia Party,No Show,10,Priya,,
+5/5/2026,7:45 PM,4,Brandt Party,Completed,6,Dana,87,Birthday
+5/5/2026,6:15 PM,5,Okafor Party,Completed,11,Tom,89,
+5/5/2026,8:30 PM,4,Nguyen Party,Completed,4,Marco,104,
+5/6/2026,5:45 PM,3,Duval Party,Completed,4,Marco,109,Anniversary
+5/6/2026,7:15 PM,6,Kim Party,Completed,5,Tom,83,
+5/6/2026,5:30 PM,4,Fischer Party,Completed,7,Jules,97,
+5/6/2026,7:15 PM,5,Duval Party,Completed,8,Dana,78,Regular
+5/6/2026,6:30 PM,2,Smith Party,Completed,12,Tom,68,Birthday
+5/6/2026,6:30 PM,4,Brandt Party,Completed,2,Marco,94,
+5/7/2026,6:15 PM,4,Ortiz Party,Completed,4,Dana,94,Anniversary
+5/7/2026,6:15 PM,2,Duval Party,Completed,2,Priya,65,
+5/7/2026,7:15 PM,2,Kim Party,Completed,13,Tom,80,
+5/7/2026,6:30 PM,2,Ortiz Party,Completed,1,Marco,76,Regular
+5/7/2026,8:45 PM,4,Smith Party,Completed,6,Tom,72,Birthday
+5/7/2026,9:45 PM,3,Marsh Party,Completed,1,Tom,94,VIP
+5/7/2026,7:00 PM,4,Garcia Party,Completed,10,Priya,81,
+5/7/2026,8:30 PM,2,Smith Party,Completed,11,Dana,106,
+5/7/2026,6:15 PM,4,Lee Party,Completed,7,Marco,92,Window request
+5/7/2026,7:00 PM,3,Nguyen Party,Completed,11,Marco,86,
+5/7/2026,7:30 PM,3,Lee Party,Cancelled,5,Tom,,
+5/7/2026,7:30 PM,5,Garcia Party,Completed,9,Dana,119,Birthday
+5/8/2026,9:15 PM,2,Duval Party,Completed,8,Marco,89,Regular
+5/8/2026,7:15 PM,4,Okafor Party,Completed,3,Priya,89,Birthday
+5/8/2026,5:30 PM,4,Ortiz Party,Completed,5,Jules,95,Birthday
+5/8/2026,8:15 PM,4,Okafor Party,Completed,9,Tom,84,
+5/8/2026,7:45 PM,4,Hayes Party,Cancelled,2,Jules,,Regular
+5/8/2026,8:00 PM,3,Smith Party,Completed,10,Jules,93,Regular
+5/8/2026,6:30 PM,4,Marsh Party,Completed,4,Priya,85,
+5/8/2026,8:45 PM,2,Ortiz Party,Completed,5,Jules,80,
+5/8/2026,5:45 PM,5,Ortiz Party,Completed,11,Tom,74,
+5/8/2026,7:15 PM,4,Smith Party,Completed,5,Priya,114,Window request
+5/8/2026,7:15 PM,2,Ortiz Party,Completed,5,Priya,94,Birthday
+5/8/2026,7:30 PM,2,Fischer Party,Completed,10,Marco,75,
+5/8/2026,6:00 PM,4,Duval Party,Completed,3,Dana,100,Regular
+5/8/2026,6:30 PM,5,Fischer Party,Completed,11,Dana,82,
+5/8/2026,6:45 PM,4,Nguyen Party,Completed,1,Priya,73,
+5/8/2026,7:30 PM,2,Lee Party,Completed,12,Tom,93,Window request
+5/9/2026,8:30 PM,2,Hayes Party,Completed,3,Tom,100,Birthday
+5/9/2026,7:00 PM,2,Smith Party,Completed,2,Jules,75,
+5/9/2026,7:45 PM,2,Ortiz Party,Completed,13,Dana,102,Anniversary
+5/9/2026,6:00 PM,4,Okafor Party,Completed,4,Tom,96,
+5/9/2026,7:00 PM,6,Lee Party,Completed,13,Dana,101,
+5/9/2026,5:15 PM,3,Nguyen Party,Completed,2,Priya,88,
+5/9/2026,9:45 PM,2,Nguyen Party,Completed,13,Priya,71,
+5/9/2026,8:45 PM,4,Brandt Party,Completed,4,Dana,90,Birthday
+5/9/2026,6:30 PM,3,Kim Party,No Show,10,Tom,,
+5/9/2026,8:30 PM,2,Ortiz Party,Completed,2,Dana,83,Window request
+5/9/2026,9:45 PM,2,Brandt Party,Completed,6,Tom,101,
+5/9/2026,5:45 PM,6,Duval Party,Completed,9,Dana,81,Regular
+5/9/2026,6:45 PM,2,Fischer Party,Completed,9,Marco,95,Window request
+5/9/2026,5:45 PM,4,Nguyen Party,Completed,7,Marco,105,Regular
+5/9/2026,9:00 PM,6,Hayes Party,Completed,11,Marco,111,
+5/9/2026,8:15 PM,4,Lee Party,Completed,6,Jules,108,
+5/9/2026,7:15 PM,5,Marsh Party,Completed,13,Jules,111,
+5/9/2026,8:15 PM,4,Lee Party,Completed,9,Jules,97,VIP
+5/9/2026,9:15 PM,3,Okafor Party,Completed,10,Jules,107,Birthday
+5/9/2026,8:15 PM,3,Smith Party,Completed,6,Tom,85,VIP
+5/9/2026,9:00 PM,2,Ortiz Party,Completed,12,Priya,75,Anniversary
+5/10/2026,9:00 PM,4,Kim Party,No Show,5,Marco,,
+5/10/2026,9:45 PM,5,Lee Party,Completed,6,Jules,98,
+5/10/2026,6:45 PM,2,Fischer Party,Completed,7,Dana,71,Anniversary
+5/10/2026,7:30 PM,2,Duval Party,Completed,2,Marco,71,
+5/10/2026,8:00 PM,2,Okafor Party,Completed,5,Jules,94,VIP
+5/10/2026,6:30 PM,4,Fischer Party,Completed,4,Marco,79,
+5/10/2026,9:30 PM,2,Kim Party,Completed,12,Jules,91,
+5/10/2026,6:45 PM,4,Kim Party,Completed,4,Jules,86,Birthday
+5/10/2026,5:45 PM,5,Brandt Party,No Show,6,Tom,,
+5/10/2026,7:15 PM,4,Smith Party,Completed,4,Tom,104,Birthday
+5/12/2026,7:00 PM,4,Marsh Party,Completed,8,Tom,117,
+5/12/2026,8:00 PM,3,Okafor Party,Completed,2,Tom,96,
+5/12/2026,7:15 PM,4,Kim Party,Completed,11,Tom,87,VIP
+5/12/2026,8:30 PM,4,Hayes Party,Completed,6,Dana,81,Regular
+5/12/2026,6:00 PM,2,Smith Party,Completed,2,Dana,93,
+5/12/2026,7:45 PM,2,Duval Party,Completed,12,Tom,92,VIP
+5/13/2026,6:15 PM,2,Kim Party,No Show,13,Dana,,VIP
+5/13/2026,6:00 PM,4,Kim Party,Completed,7,Priya,81,
+5/13/2026,6:30 PM,4,Hayes Party,Completed,11,Tom,81,
+5/13/2026,8:00 PM,4,Okafor Party,Cancelled,4,Dana,,VIP
+5/13/2026,5:45 PM,4,Smith Party,Completed,13,Marco,94,Birthday
+5/13/2026,8:45 PM,6,Duval Party,Completed,2,Dana,88,Regular
+5/14/2026,6:00 PM,4,Brandt Party,Completed,4,Priya,88,
+5/14/2026,8:45 PM,4,Kim Party,Completed,10,Tom,110,VIP
+5/14/2026,7:15 PM,3,Duval Party,Completed,1,Jules,91,
+5/14/2026,7:00 PM,4,Nguyen Party,Completed,8,Marco,98,Anniversary
+5/14/2026,7:45 PM,5,Hayes Party,Completed,2,Marco,87,
+5/14/2026,9:45 PM,2,Fischer Party,Completed,5,Marco,86,VIP
+5/14/2026,6:15 PM,5,Smith Party,Completed,10,Dana,95,
+5/14/2026,6:15 PM,2,Brandt Party,Completed,3,Priya,99,
+5/14/2026,6:00 PM,6,Kim Party,Completed,2,Marco,103,Regular
+5/15/2026,7:45 PM,4,Marsh Party,Completed,9,Tom,117,
+5/15/2026,6:00 PM,2,Fischer Party,Completed,8,Dana,83,Window request
+5/15/2026,8:15 PM,2,Smith Party,Completed,5,Marco,86,Window request
+5/15/2026,6:15 PM,2,Ortiz Party,Completed,5,Priya,109,Regular
+5/15/2026,9:45 PM,2,Hayes Party,Completed,2,Marco,97,Regular
+5/15/2026,8:45 PM,2,Nguyen Party,Completed,10,Marco,88,
+5/15/2026,8:45 PM,4,Ortiz Party,Completed,8,Marco,95,Regular
+5/15/2026,5:45 PM,2,Smith Party,Completed,1,Jules,86,Regular
+5/15/2026,8:30 PM,4,Marsh Party,Completed,13,Jules,77,Window request
+5/15/2026,7:00 PM,4,Brandt Party,Completed,10,Marco,96,
+5/15/2026,9:00 PM,2,Smith Party,Completed,2,Tom,86,
+5/15/2026,8:30 PM,4,Smith Party,Completed,1,Priya,101,Window request
+5/15/2026,5:30 PM,6,Ortiz Party,Completed,10,Dana,90,
+5/15/2026,6:45 PM,4,Fischer Party,Completed,13,Jules,54,Window request
+5/15/2026,6:15 PM,3,Smith Party,Completed,10,Tom,93,Regular
+5/15/2026,7:00 PM,4,Ortiz Party,Cancelled,5,Marco,,VIP
+5/15/2026,8:45 PM,2,Duval Party,Completed,12,Dana,90,Anniversary
+5/16/2026,8:00 PM,2,Lee Party,Completed,5,Jules,109,Regular
+5/16/2026,8:00 PM,4,Duval Party,Completed,9,Priya,98,Regular
+5/16/2026,7:00 PM,4,Lee Party,Completed,7,Dana,64,Birthday
+5/16/2026,5:30 PM,3,Hayes Party,Completed,13,Jules,104,VIP
+5/16/2026,9:45 PM,6,Marsh Party,Completed,11,Marco,86,VIP
+5/16/2026,6:30 PM,4,Garcia Party,Completed,7,Tom,86,
+5/16/2026,7:45 PM,2,Nguyen Party,Completed,5,Jules,113,Window request
+5/16/2026,7:15 PM,4,Kim Party,Completed,6,Jules,105,
+5/16/2026,6:00 PM,4,Okafor Party,No Show,12,Priya,,
+5/16/2026,7:15 PM,2,Fischer Party,Completed,1,Tom,96,
+5/16/2026,7:00 PM,4,Brandt Party,Completed,3,Jules,84,Birthday
+5/16/2026,7:15 PM,4,Fischer Party,Cancelled,1,Dana,,
+5/16/2026,7:30 PM,6,Duval Party,Completed,5,Marco,90,Anniversary
+5/16/2026,6:45 PM,2,Marsh Party,Completed,10,Priya,79,Anniversary
+5/16/2026,6:30 PM,2,Okafor Party,Completed,2,Dana,74,Anniversary
+5/16/2026,9:45 PM,2,Marsh Party,Completed,9,Priya,88,VIP
+5/16/2026,8:45 PM,2,Smith Party,Completed,2,Marco,108,Anniversary
+5/16/2026,8:45 PM,4,Hayes Party,Completed,3,Jules,99,Anniversary
+5/16/2026,5:30 PM,4,Duval Party,Completed,12,Marco,87,
+5/16/2026,6:30 PM,3,Nguyen Party,Completed,11,Jules,91,
+5/16/2026,5:45 PM,2,Kim Party,Completed,12,Jules,100,Window request
+5/16/2026,9:30 PM,2,Smith Party,Completed,11,Marco,91,Window request
+5/17/2026,5:30 PM,5,Hayes Party,Completed,12,Marco,56,
+5/17/2026,8:45 PM,5,Garcia Party,Completed,7,Dana,97,
+5/17/2026,8:15 PM,4,Hayes Party,Completed,6,Tom,94,
+5/17/2026,7:45 PM,4,Duval Party,Cancelled,3,Marco,,VIP
+5/17/2026,6:15 PM,2,Fischer Party,Completed,5,Tom,79,Window request
+5/17/2026,7:45 PM,3,Nguyen Party,Completed,8,Marco,96,
+5/17/2026,5:45 PM,8,Marsh Party,Completed,9,Priya,96,
+5/17/2026,6:00 PM,3,Brandt Party,Completed,7,Tom,75,Window request
+5/19/2026,9:30 PM,5,Brandt Party,Completed,8,Jules,89,
+5/19/2026,5:00 PM,3,Duval Party,Completed,9,Priya,113,Regular
+5/19/2026,6:30 PM,4,Lee Party,Completed,10,Marco,81,
+5/19/2026,6:15 PM,3,Hayes Party,Completed,6,Jules,93,
+5/19/2026,7:15 PM,4,Duval Party,Completed,1,Dana,61,
+5/19/2026,7:45 PM,2,Kim Party,Completed,8,Tom,96,
+5/20/2026,6:45 PM,2,Hayes Party,Completed,10,Priya,82,Anniversary
+5/20/2026,7:00 PM,5,Lee Party,Completed,6,Jules,102,Window request
+5/20/2026,7:30 PM,5,Smith Party,Completed,12,Tom,105,
+5/20/2026,9:00 PM,5,Fischer Party,Completed,9,Dana,72,Anniversary
+5/20/2026,8:00 PM,2,Smith Party,Completed,9,Marco,89,VIP
+5/20/2026,5:15 PM,4,Nguyen Party,Completed,1,Tom,62,
+5/21/2026,8:00 PM,2,Okafor Party,Completed,4,Priya,103,Window request
+5/21/2026,7:15 PM,3,Ortiz Party,Completed,6,Dana,96,Regular
+5/21/2026,7:30 PM,2,Smith Party,Completed,1,Marco,90,Birthday
+5/21/2026,6:45 PM,2,Fischer Party,Completed,1,Dana,78,Birthday
+5/21/2026,7:45 PM,5,Nguyen Party,Completed,3,Jules,90,Window request
+5/21/2026,6:30 PM,5,Lee Party,Completed,8,Tom,80,
+5/21/2026,7:00 PM,6,Kim Party,Completed,10,Tom,82,
+5/21/2026,7:15 PM,5,Smith Party,Completed,3,Tom,95,
+5/21/2026,7:45 PM,4,Marsh Party,Completed,3,Jules,103,
+5/21/2026,5:30 PM,2,Nguyen Party,Completed,12,Priya,84,
+5/21/2026,8:45 PM,4,Hayes Party,Completed,9,Priya,98,
+5/21/2026,6:15 PM,3,Marsh Party,Cancelled,7,Marco,,Window request
+5/22/2026,7:15 PM,2,Marsh Party,Cancelled,7,Dana,,Anniversary
+5/22/2026,6:00 PM,4,Marsh Party,Completed,8,Jules,115,
+5/22/2026,7:45 PM,2,Duval Party,Completed,4,Priya,108,Window request
+5/22/2026,7:15 PM,4,Fischer Party,Completed,12,Priya,102,Regular
+5/22/2026,5:45 PM,4,Fischer Party,Completed,13,Jules,96,Birthday
+5/22/2026,8:15 PM,2,Marsh Party,Completed,10,Priya,79,
+5/22/2026,7:15 PM,2,Okafor Party,Cancelled,4,Priya,,Birthday
+5/22/2026,5:45 PM,4,Nguyen Party,Completed,12,Marco,92,Regular
+5/22/2026,7:30 PM,3,Lee Party,Completed,5,Priya,103,VIP
+5/22/2026,6:30 PM,4,Duval Party,Completed,12,Priya,117,
+5/22/2026,8:15 PM,6,Brandt Party,Completed,11,Tom,77,
+5/22/2026,8:30 PM,2,Smith Party,Completed,4,Priya,62,Window request
+5/22/2026,5:30 PM,3,Kim Party,Completed,8,Marco,93,Window request
+5/22/2026,7:45 PM,4,Smith Party,Completed,5,Tom,105,
+5/22/2026,6:45 PM,6,Fischer Party,Completed,6,Priya,107,Anniversary
+5/22/2026,7:15 PM,3,Hayes Party,Completed,5,Priya,100,
+5/23/2026,5:30 PM,2,Smith Party,Completed,8,Marco,88,
+5/23/2026,6:15 PM,2,Smith Party,Completed,1,Dana,84,Anniversary
+5/23/2026,8:15 PM,6,Lee Party,Completed,12,Jules,68,Birthday
+5/23/2026,7:15 PM,4,Garcia Party,No Show,4,Dana,,
+5/23/2026,6:15 PM,3,Okafor Party,Cancelled,11,Tom,,
+5/23/2026,8:00 PM,2,Fischer Party,Completed,13,Marco,92,
+5/23/2026,9:00 PM,4,Brandt Party,Completed,3,Priya,110,
+5/23/2026,6:15 PM,4,Fischer Party,Completed,9,Dana,86,
+5/23/2026,6:45 PM,2,Okafor Party,Completed,10,Marco,86,Birthday
+5/23/2026,7:15 PM,4,Ortiz Party,No Show,12,Marco,,
+5/23/2026,8:15 PM,5,Garcia Party,Completed,7,Jules,91,Window request
+5/23/2026,9:45 PM,8,Kim Party,Cancelled,2,Priya,,
+5/23/2026,6:30 PM,5,Fischer Party,Completed,9,Priya,97,Anniversary
+5/23/2026,8:15 PM,4,Smith Party,Completed,13,Dana,85,
+5/23/2026,7:45 PM,2,Kim Party,Completed,5,Jules,96,
+5/23/2026,6:15 PM,6,Smith Party,Completed,13,Dana,97,Window request
+5/23/2026,8:30 PM,4,Smith Party,Completed,1,Marco,93,Anniversary
+5/24/2026,9:45 PM,2,Duval Party,Completed,1,Tom,95,
+5/24/2026,8:45 PM,3,Marsh Party,Completed,7,Marco,62,Window request
+5/24/2026,9:15 PM,4,Duval Party,Completed,4,Dana,90,
+5/24/2026,6:30 PM,4,Marsh Party,Completed,12,Marco,82,Window request
+5/24/2026,6:15 PM,3,Lee Party,Completed,12,Tom,102,Window request
+5/24/2026,7:30 PM,4,Fischer Party,Completed,2,Jules,77,
+5/24/2026,7:00 PM,8,Brandt Party,Completed,7,Dana,67,VIP
+5/24/2026,8:30 PM,2,Kim Party,Completed,2,Dana,107,Anniversary
+5/24/2026,5:00 PM,2,Duval Party,Completed,11,Dana,95,Birthday
+5/24/2026,7:45 PM,5,Smith Party,Completed,5,Jules,82,Window request
+5/24/2026,9:15 PM,2,Hayes Party,Completed,4,Priya,84,Birthday
+5/24/2026,7:00 PM,4,Garcia Party,Completed,13,Marco,103,Birthday
+5/26/2026,6:45 PM,4,Kim Party,Completed,9,Marco,106,
+5/26/2026,8:30 PM,2,Garcia Party,Completed,3,Dana,81,
+5/26/2026,8:30 PM,4,Brandt Party,Completed,11,Marco,86,
+5/26/2026,7:30 PM,5,Marsh Party,Completed,7,Jules,94,
+5/26/2026,6:00 PM,4,Lee Party,Cancelled,4,Jules,,
+5/26/2026,8:00 PM,4,Hayes Party,Completed,13,Marco,82,Birthday
+5/26/2026,6:00 PM,4,Hayes Party,Completed,13,Dana,104,Birthday
+5/27/2026,6:15 PM,8,Fischer Party,Completed,13,Marco,75,
+5/27/2026,5:00 PM,5,Fischer Party,Completed,5,Priya,87,
+5/27/2026,7:00 PM,4,Okafor Party,Completed,6,Dana,85,Regular
+5/27/2026,8:00 PM,3,Fischer Party,Completed,6,Priya,78,
+5/27/2026,5:15 PM,4,Smith Party,Completed,4,Priya,99,Window request
+5/27/2026,7:30 PM,8,Smith Party,Completed,7,Priya,120,
+5/27/2026,9:30 PM,2,Kim Party,Completed,13,Dana,119,
+5/27/2026,7:15 PM,2,Garcia Party,Completed,7,Jules,98,
+5/27/2026,7:15 PM,3,Lee Party,Completed,8,Jules,78,
+5/27/2026,8:00 PM,4,Kim Party,Completed,8,Priya,85,Anniversary
+5/28/2026,6:45 PM,2,Hayes Party,Completed,8,Tom,92,VIP
+5/28/2026,8:15 PM,2,Ortiz Party,Completed,12,Marco,102,
+5/28/2026,6:00 PM,4,Marsh Party,Completed,6,Jules,118,
+5/28/2026,6:30 PM,4,Hayes Party,Completed,2,Dana,100,
+5/28/2026,7:45 PM,3,Okafor Party,Completed,6,Tom,80,VIP
+5/28/2026,7:00 PM,2,Hayes Party,Completed,9,Tom,115,Birthday
+5/28/2026,8:30 PM,3,Nguyen Party,Completed,6,Tom,93,
+5/28/2026,5:15 PM,2,Okafor Party,Completed,12,Jules,108,
+5/28/2026,6:15 PM,4,Smith Party,Completed,12,Jules,92,Regular
+5/28/2026,7:15 PM,2,Marsh Party,No Show,8,Marco,,Anniversary
+5/28/2026,7:15 PM,2,Garcia Party,Completed,8,Dana,110,
+5/29/2026,6:45 PM,2,Ortiz Party,Completed,8,Jules,114,Regular
+5/29/2026,9:30 PM,2,Nguyen Party,Completed,13,Jules,88,Window request
+5/29/2026,7:45 PM,2,Ortiz Party,Completed,12,Tom,89,Birthday
+5/29/2026,7:15 PM,2,Ortiz Party,Completed,13,Marco,86,
+5/29/2026,5:00 PM,5,Kim Party,Completed,4,Marco,108,Window request
+5/29/2026,8:00 PM,2,Garcia Party,No Show,13,Tom,,
+5/29/2026,6:30 PM,4,Duval Party,Completed,1,Tom,109,
+5/29/2026,8:30 PM,4,Okafor Party,Completed,10,Tom,88,Regular
+5/29/2026,7:45 PM,4,Kim Party,Completed,4,Jules,86,Birthday
+5/29/2026,7:15 PM,4,Lee Party,Cancelled,1,Jules,,Window request
+5/29/2026,6:00 PM,2,Fischer Party,Completed,13,Tom,106,
+5/29/2026,5:30 PM,4,Marsh Party,Completed,7,Priya,96,
+5/29/2026,7:15 PM,4,Garcia Party,Completed,13,Marco,64,
+5/29/2026,6:45 PM,2,Garcia Party,Completed,4,Marco,76,Birthday
+5/29/2026,6:30 PM,2,Marsh Party,Completed,5,Jules,91,VIP
+5/29/2026,7:45 PM,4,Hayes Party,Completed,6,Priya,91,
+5/29/2026,8:00 PM,2,Smith Party,Completed,2,Tom,107,
+5/29/2026,6:15 PM,5,Smith Party,Completed,3,Dana,98,Window request
+5/30/2026,8:30 PM,2,Lee Party,Completed,2,Jules,111,Birthday
+5/30/2026,7:00 PM,2,Duval Party,Completed,8,Tom,90,
+5/30/2026,8:45 PM,4,Kim Party,Cancelled,4,Jules,,VIP
+5/30/2026,9:45 PM,3,Duval Party,Completed,9,Dana,78,
+5/30/2026,6:45 PM,4,Smith Party,Completed,1,Tom,99,Birthday
+5/30/2026,5:30 PM,2,Nguyen Party,Completed,1,Tom,98,
+5/30/2026,8:45 PM,4,Fischer Party,Completed,6,Dana,66,
+5/30/2026,6:15 PM,2,Duval Party,Completed,7,Tom,108,VIP
+5/30/2026,7:45 PM,5,Fischer Party,Completed,3,Marco,88,
+5/30/2026,8:30 PM,3,Smith Party,Completed,12,Jules,110,VIP
+5/30/2026,9:45 PM,4,Smith Party,Completed,4,Tom,96,
+5/30/2026,9:00 PM,4,Fischer Party,Completed,12,Priya,87,
+5/30/2026,7:00 PM,2,Ortiz Party,Completed,3,Dana,100,
+5/30/2026,7:45 PM,2,Marsh Party,Completed,11,Dana,101,
+5/30/2026,5:00 PM,4,Fischer Party,Completed,4,Dana,65,
+5/30/2026,7:00 PM,2,Kim Party,Completed,1,Jules,110,
+5/30/2026,6:00 PM,3,Lee Party,No Show,6,Priya,,Birthday
+5/30/2026,8:45 PM,2,Marsh Party,No Show,13,Dana,,
+5/31/2026,7:15 PM,3,Nguyen Party,Completed,4,Marco,110,
+5/31/2026,6:45 PM,4,Brandt Party,Cancelled,10,Jules,,Regular
+5/31/2026,8:00 PM,5,Nguyen Party,Completed,1,Jules,86,VIP
+5/31/2026,5:30 PM,4,Smith Party,Completed,11,Marco,97,Birthday
+5/31/2026,8:45 PM,3,Kim Party,Completed,5,Tom,99,
+5/31/2026,5:15 PM,4,Duval Party,Completed,7,Dana,89,Window request
+5/31/2026,7:00 PM,2,Marsh Party,Completed,12,Dana,83,Anniversary
+5/31/2026,7:15 PM,2,Hayes Party,Completed,8,Marco,80,
+5/31/2026,8:45 PM,2,Fischer Party,Completed,12,Dana,104,
+5/31/2026,7:15 PM,5,Okafor Party,Completed,9,Dana,122,
+6/2/2026,5:30 PM,2,Garcia Party,Completed,4,Marco,83,VIP
+6/2/2026,8:15 PM,3,Hayes Party,Completed,6,Marco,85,Regular
+6/2/2026,7:30 PM,2,Brandt Party,Completed,8,Marco,117,VIP
+6/2/2026,6:15 PM,3,Nguyen Party,Completed,6,Priya,66,
+6/2/2026,8:45 PM,2,Hayes Party,Completed,7,Jules,72,Regular
+6/2/2026,8:00 PM,3,Garcia Party,Completed,6,Dana,72,
+6/2/2026,5:30 PM,2,Garcia Party,Completed,11,Marco,120,Regular
+6/3/2026,7:15 PM,2,Ortiz Party,Completed,6,Dana,96,VIP
+6/3/2026,7:15 PM,4,Brandt Party,Completed,7,Tom,86,
+6/3/2026,8:00 PM,2,Kim Party,Completed,2,Jules,86,Window request
+6/3/2026,9:15 PM,4,Garcia Party,No Show,9,Dana,,
+6/3/2026,8:15 PM,2,Ortiz Party,Completed,7,Jules,98,Anniversary
+6/3/2026,6:45 PM,5,Duval Party,Completed,3,Jules,88,Anniversary
+6/4/2026,5:15 PM,2,Fischer Party,Completed,12,Priya,101,Birthday
+6/4/2026,8:00 PM,8,Smith Party,Completed,1,Dana,105,
+6/4/2026,7:30 PM,3,Smith Party,Cancelled,13,Tom,,VIP
+6/4/2026,8:00 PM,5,Ortiz Party,Completed,11,Tom,95,Regular
+6/4/2026,8:30 PM,5,Smith Party,Completed,12,Priya,78,
+6/4/2026,8:30 PM,2,Duval Party,Completed,6,Priya,90,
+6/4/2026,6:15 PM,2,Smith Party,Completed,1,Marco,89,
+6/4/2026,7:45 PM,2,Marsh Party,Completed,7,Priya,101,
+6/4/2026,8:00 PM,4,Fischer Party,Completed,1,Marco,84,
+6/4/2026,7:00 PM,4,Hayes Party,Completed,10,Tom,86,
+6/5/2026,8:30 PM,2,Ortiz Party,Completed,7,Jules,103,
+6/5/2026,8:00 PM,4,Lee Party,Completed,8,Tom,89,
+6/5/2026,7:15 PM,2,Fischer Party,Completed,4,Priya,105,
+6/5/2026,6:30 PM,4,Nguyen Party,Cancelled,1,Dana,,Regular
+6/5/2026,6:00 PM,3,Smith Party,Completed,6,Dana,91,
+6/5/2026,8:15 PM,2,Brandt Party,Completed,4,Dana,78,VIP
+6/5/2026,8:30 PM,2,Kim Party,Cancelled,9,Jules,,
+6/5/2026,9:30 PM,4,Nguyen Party,Completed,5,Marco,92,
+6/5/2026,5:00 PM,3,Kim Party,Completed,3,Dana,77,
+6/5/2026,8:30 PM,4,Okafor Party,Completed,1,Tom,101,
+6/5/2026,5:45 PM,3,Kim Party,Completed,2,Tom,64,
+6/5/2026,6:45 PM,3,Okafor Party,Completed,2,Tom,108,Regular
+6/5/2026,8:30 PM,2,Okafor Party,Completed,7,Marco,97,
+6/5/2026,9:45 PM,3,Marsh Party,Completed,3,Marco,82,Birthday
+6/5/2026,9:30 PM,3,Fischer Party,Completed,9,Dana,108,
+6/5/2026,6:45 PM,6,Marsh Party,Completed,1,Tom,82,
+6/5/2026,8:00 PM,2,Hayes Party,Completed,13,Tom,101,
+6/6/2026,7:30 PM,6,Hayes Party,Completed,11,Priya,89,VIP
+6/6/2026,8:45 PM,4,Duval Party,Completed,7,Dana,112,
+6/6/2026,7:00 PM,2,Lee Party,Completed,11,Jules,81,Birthday
+6/6/2026,6:15 PM,4,Hayes Party,Completed,11,Marco,88,
+6/6/2026,8:45 PM,2,Brandt Party,Completed,7,Dana,89,
+6/6/2026,6:45 PM,2,Lee Party,Completed,11,Jules,94,
+6/6/2026,5:15 PM,2,Kim Party,Completed,4,Tom,111,
+6/6/2026,6:45 PM,4,Lee Party,Completed,7,Dana,97,Anniversary
+6/6/2026,6:30 PM,5,Nguyen Party,Completed,9,Tom,109,Regular
+6/6/2026,7:30 PM,4,Lee Party,Completed,10,Priya,76,VIP
+6/6/2026,9:00 PM,2,Okafor Party,Completed,12,Priya,81,Anniversary
+6/6/2026,8:30 PM,4,Garcia Party,Completed,2,Jules,107,Birthday
+6/6/2026,8:00 PM,4,Ortiz Party,Cancelled,5,Tom,,
+6/6/2026,7:00 PM,3,Hayes Party,Completed,7,Tom,95,
+6/6/2026,5:00 PM,6,Kim Party,Completed,6,Tom,91,
+6/6/2026,9:45 PM,4,Nguyen Party,Completed,6,Tom,100,Birthday
+6/6/2026,6:15 PM,2,Marsh Party,Completed,5,Jules,67,Window request
+6/6/2026,5:30 PM,3,Kim Party,Completed,12,Priya,63,Birthday
+6/6/2026,8:15 PM,2,Duval Party,Completed,12,Jules,73,
+6/6/2026,9:00 PM,2,Kim Party,Completed,13,Dana,104,VIP
+6/7/2026,6:00 PM,4,Nguyen Party,Cancelled,1,Dana,,Window request
+6/7/2026,8:00 PM,2,Duval Party,Completed,9,Tom,127,Birthday
+6/7/2026,5:00 PM,4,Hayes Party,Completed,2,Tom,64,
+6/7/2026,9:15 PM,3,Brandt Party,Completed,6,Dana,100,Regular
+6/7/2026,5:45 PM,2,Okafor Party,Completed,11,Tom,103,
+6/7/2026,7:30 PM,3,Okafor Party,Completed,13,Priya,87,Anniversary
+6/7/2026,6:00 PM,4,Kim Party,Completed,7,Tom,84,
+6/7/2026,6:00 PM,3,Duval Party,Completed,8,Dana,73,
+6/7/2026,7:45 PM,4,Hayes Party,Completed,10,Jules,68,
+6/7/2026,6:15 PM,6,Lee Party,Completed,13,Marco,110,
+6/7/2026,5:15 PM,2,Ortiz Party,Completed,8,Priya,112,
+6/9/2026,5:30 PM,4,Nguyen Party,Completed,4,Marco,102,
+6/9/2026,6:15 PM,2,Okafor Party,Completed,12,Jules,116,Window request
+6/9/2026,8:30 PM,2,Fischer Party,Completed,3,Dana,111,VIP
+6/9/2026,8:45 PM,2,Smith Party,Completed,12,Marco,89,
+6/9/2026,6:45 PM,4,Okafor Party,Completed,8,Jules,89,
+6/9/2026,6:45 PM,3,Hayes Party,Completed,8,Marco,82,
+6/9/2026,6:45 PM,2,Kim Party,Completed,8,Priya,110,Anniversary
+6/9/2026,9:30 PM,3,Ortiz Party,Completed,11,Jules,84,
+6/10/2026,5:15 PM,4,Nguyen Party,Completed,8,Jules,86,Window request
+6/10/2026,8:30 PM,2,Ortiz Party,No Show,13,Tom,,
+6/10/2026,8:45 PM,3,Okafor Party,Completed,13,Dana,71,
+6/10/2026,6:15 PM,4,Nguyen Party,Completed,7,Marco,72,VIP
+6/10/2026,9:00 PM,2,Nguyen Party,Completed,13,Marco,96,
+6/10/2026,9:45 PM,3,Garcia Party,Completed,3,Jules,116,Birthday
+6/10/2026,7:45 PM,4,Hayes Party,Completed,13,Marco,93,VIP
+6/10/2026,7:15 PM,6,Fischer Party,Completed,13,Priya,105,Birthday
+6/10/2026,7:45 PM,4,Garcia Party,Completed,10,Marco,76,
+6/11/2026,7:00 PM,4,Garcia Party,Completed,2,Marco,84,
+6/11/2026,5:30 PM,3,Garcia Party,Completed,6,Priya,84,Birthday
+6/11/2026,6:15 PM,2,Smith Party,Completed,12,Priya,84,
+6/11/2026,7:30 PM,2,Garcia Party,Completed,1,Priya,103,VIP
+6/11/2026,8:15 PM,4,Ortiz Party,Completed,13,Priya,98,
+6/11/2026,7:00 PM,6,Nguyen Party,Completed,8,Priya,93,
+6/11/2026,5:30 PM,4,Okafor Party,Completed,11,Jules,105,
+6/11/2026,8:30 PM,2,Kim Party,Completed,10,Priya,89,
+6/11/2026,6:00 PM,4,Smith Party,Completed,12,Dana,64,
+6/12/2026,9:15 PM,4,Kim Party,Completed,2,Tom,106,Anniversary
+6/12/2026,9:00 PM,2,Garcia Party,Completed,7,Tom,100,Window request
+6/12/2026,8:15 PM,2,Garcia Party,Completed,6,Jules,80,
+6/12/2026,5:30 PM,4,Duval Party,Completed,1,Jules,80,
+6/12/2026,6:00 PM,6,Nguyen Party,Completed,13,Tom,68,VIP
+6/12/2026,9:45 PM,2,Okafor Party,Completed,1,Marco,102,Birthday
+6/12/2026,5:00 PM,3,Ortiz Party,Completed,10,Jules,102,Regular
+6/12/2026,6:15 PM,6,Kim Party,Completed,7,Dana,107,
+6/12/2026,8:30 PM,2,Hayes Party,No Show,12,Priya,,
+6/12/2026,5:45 PM,2,Marsh Party,Completed,5,Jules,99,VIP
+6/12/2026,6:00 PM,4,Kim Party,Completed,2,Priya,85,
+6/12/2026,9:45 PM,4,Okafor Party,Completed,13,Dana,89,
+6/12/2026,8:45 PM,2,Brandt Party,Completed,9,Dana,100,Regular
+6/12/2026,5:45 PM,2,Hayes Party,Completed,3,Priya,101,
+6/12/2026,6:45 PM,3,Garcia Party,Completed,6,Dana,86,
+6/12/2026,5:45 PM,2,Hayes Party,Completed,7,Priya,107,
+6/13/2026,6:15 PM,2,Smith Party,Completed,9,Marco,80,
+6/13/2026,7:30 PM,4,Smith Party,No Show,13,Tom,,
+6/13/2026,7:00 PM,6,Marsh Party,Completed,3,Marco,110,Anniversary
+6/13/2026,6:00 PM,2,Hayes Party,Completed,8,Dana,58,Regular
+6/13/2026,6:45 PM,5,Nguyen Party,Completed,7,Marco,61,Window request
+6/13/2026,7:15 PM,5,Garcia Party,Completed,12,Dana,73,VIP
+6/13/2026,7:30 PM,2,Fischer Party,Completed,2,Priya,84,
+6/13/2026,8:30 PM,2,Duval Party,Completed,5,Tom,67,Birthday
+6/13/2026,9:15 PM,2,Fischer Party,Cancelled,12,Marco,,Window request
+6/13/2026,5:30 PM,4,Okafor Party,Completed,1,Priya,113,VIP
+6/13/2026,8:30 PM,2,Duval Party,Completed,3,Marco,121,VIP
+6/13/2026,8:00 PM,6,Kim Party,Completed,11,Priya,94,
+6/13/2026,8:45 PM,4,Ortiz Party,Completed,1,Priya,82,
+6/13/2026,5:45 PM,2,Lee Party,Completed,8,Jules,72,
+6/13/2026,7:30 PM,3,Duval Party,Completed,10,Dana,76,Birthday
+6/13/2026,5:15 PM,5,Hayes Party,Completed,8,Dana,88,VIP
+6/13/2026,9:15 PM,5,Smith Party,Completed,3,Tom,67,
+6/13/2026,6:00 PM,2,Fischer Party,Completed,4,Dana,95,Anniversary
+6/14/2026,6:45 PM,2,Nguyen Party,Completed,10,Jules,75,Regular
+6/14/2026,8:30 PM,3,Nguyen Party,Completed,2,Marco,90,Birthday
+6/14/2026,5:00 PM,2,Hayes Party,Completed,4,Priya,102,Window request
+6/14/2026,7:30 PM,2,Lee Party,Completed,4,Dana,90,Anniversary
+6/14/2026,6:45 PM,2,Lee Party,Completed,9,Priya,100,VIP
+6/14/2026,5:00 PM,5,Okafor Party,Cancelled,7,Dana,,Birthday
+6/14/2026,8:00 PM,5,Duval Party,Completed,6,Jules,99,Birthday
+6/14/2026,6:45 PM,4,Smith Party,Completed,8,Tom,103,
+6/14/2026,7:45 PM,2,Garcia Party,Completed,2,Jules,103,
+6/14/2026,8:00 PM,2,Okafor Party,Completed,2,Marco,90,Regular
+6/14/2026,6:00 PM,3,Hayes Party,Completed,1,Marco,69,
+6/14/2026,5:30 PM,4,Kim Party,Completed,6,Priya,78,
+6/14/2026,6:00 PM,4,Fischer Party,Completed,8,Priya,88,Birthday
+6/16/2026,6:15 PM,2,Duval Party,Cancelled,3,Marco,,Window request
+6/16/2026,5:00 PM,4,Hayes Party,No Show,4,Jules,,
+6/16/2026,6:00 PM,5,Nguyen Party,No Show,9,Jules,,Birthday
+6/16/2026,8:15 PM,4,Ortiz Party,Completed,12,Dana,84,VIP
+6/16/2026,9:00 PM,2,Brandt Party,Completed,6,Dana,104,
+6/16/2026,9:15 PM,2,Smith Party,Completed,3,Tom,94,
+6/16/2026,8:45 PM,4,Marsh Party,Cancelled,3,Dana,,Window request
+6/16/2026,5:15 PM,4,Hayes Party,Completed,6,Jules,68,Birthday
+6/16/2026,6:45 PM,4,Nguyen Party,Completed,12,Jules,115,
+6/17/2026,5:30 PM,4,Garcia Party,Completed,12,Jules,79,
+6/17/2026,5:30 PM,2,Marsh Party,Completed,10,Dana,102,Anniversary
+6/17/2026,5:45 PM,2,Marsh Party,Cancelled,1,Dana,,
+6/17/2026,6:30 PM,4,Duval Party,Completed,3,Dana,109,VIP
+6/17/2026,8:30 PM,4,Kim Party,Completed,13,Dana,102,VIP
+6/17/2026,9:00 PM,2,Okafor Party,Completed,9,Jules,99,
+6/17/2026,6:15 PM,3,Duval Party,Completed,9,Marco,89,
+6/18/2026,7:00 PM,4,Duval Party,Completed,6,Marco,89,Birthday
+6/18/2026,5:15 PM,2,Smith Party,Completed,11,Jules,80,
+6/18/2026,5:30 PM,2,Lee Party,Completed,1,Dana,99,Birthday
+6/18/2026,7:00 PM,8,Marsh Party,Completed,5,Priya,76,
+6/18/2026,8:15 PM,4,Nguyen Party,Cancelled,3,Marco,,Anniversary
+6/18/2026,9:00 PM,4,Nguyen Party,Completed,10,Tom,120,
+6/18/2026,7:30 PM,2,Fischer Party,Completed,4,Tom,83,VIP
+6/18/2026,7:15 PM,2,Garcia Party,Cancelled,3,Marco,,
+6/18/2026,9:45 PM,4,Hayes Party,Completed,12,Jules,90,
+6/18/2026,6:00 PM,3,Nguyen Party,Completed,12,Priya,85,VIP
+6/19/2026,9:30 PM,4,Hayes Party,Completed,10,Dana,75,
+6/19/2026,6:45 PM,4,Okafor Party,Cancelled,10,Dana,,Window request
+6/19/2026,8:00 PM,2,Okafor Party,Completed,6,Dana,76,Anniversary
+6/19/2026,7:45 PM,4,Ortiz Party,Completed,7,Jules,106,
+6/19/2026,5:30 PM,2,Nguyen Party,No Show,11,Marco,,
+6/19/2026,6:15 PM,2,Garcia Party,Completed,3,Dana,101,VIP
+6/19/2026,9:15 PM,8,Hayes Party,Completed,4,Priya,103,
+6/19/2026,5:15 PM,2,Okafor Party,Completed,13,Dana,108,
+6/19/2026,6:00 PM,5,Fischer Party,Completed,13,Priya,81,Birthday
+6/19/2026,7:15 PM,2,Garcia Party,Completed,6,Dana,55,Window request
+6/19/2026,7:15 PM,3,Kim Party,Completed,3,Jules,84,
+6/19/2026,7:30 PM,2,Duval Party,Completed,11,Jules,88,
+6/19/2026,6:30 PM,3,Smith Party,Completed,9,Priya,94,
+6/19/2026,6:15 PM,2,Okafor Party,Completed,8,Marco,98,
+6/19/2026,6:30 PM,8,Fischer Party,Completed,4,Tom,81,
+6/19/2026,7:15 PM,6,Brandt Party,Completed,7,Jules,90,Window request
+6/20/2026,6:00 PM,2,Hayes Party,Completed,13,Tom,86,VIP
+6/20/2026,9:15 PM,2,Garcia Party,Completed,3,Dana,76,Birthday
+6/20/2026,6:45 PM,5,Smith Party,Completed,6,Jules,67,
+6/20/2026,7:30 PM,2,Garcia Party,Completed,12,Dana,98,
+6/20/2026,8:15 PM,3,Duval Party,Completed,9,Marco,84,VIP
+6/20/2026,8:45 PM,6,Nguyen Party,Completed,10,Jules,88,Window request
+6/20/2026,9:00 PM,2,Okafor Party,Completed,10,Marco,112,
+6/20/2026,7:30 PM,2,Okafor Party,Completed,2,Marco,112,VIP
+6/20/2026,6:45 PM,6,Okafor Party,Completed,7,Marco,79,
+6/20/2026,7:45 PM,5,Kim Party,Completed,2,Priya,76,Birthday
+6/20/2026,6:15 PM,2,Nguyen Party,Completed,8,Priya,121,
+6/20/2026,6:00 PM,2,Marsh Party,Completed,11,Priya,87,
+6/20/2026,8:30 PM,4,Ortiz Party,Completed,5,Marco,96,Anniversary
+6/20/2026,9:45 PM,6,Marsh Party,Cancelled,10,Dana,,
+6/20/2026,6:15 PM,2,Marsh Party,Completed,5,Jules,100,Anniversary
+6/20/2026,8:15 PM,4,Lee Party,Completed,10,Jules,95,Window request
+6/20/2026,9:45 PM,2,Kim Party,Completed,1,Jules,71,Birthday
+6/21/2026,8:30 PM,6,Lee Party,Completed,8,Tom,83,Regular
+6/21/2026,5:00 PM,2,Lee Party,Completed,3,Tom,89,Birthday
+6/21/2026,9:30 PM,2,Hayes Party,Completed,9,Priya,63,Anniversary
+6/21/2026,6:30 PM,4,Garcia Party,Completed,9,Priya,83,Birthday
+6/21/2026,5:45 PM,6,Okafor Party,Completed,9,Jules,87,
+6/21/2026,6:15 PM,2,Nguyen Party,Completed,13,Marco,84,
+6/21/2026,5:15 PM,2,Smith Party,Completed,12,Jules,97,
+6/21/2026,8:00 PM,5,Marsh Party,Cancelled,9,Dana,,VIP
+6/21/2026,8:45 PM,2,Marsh Party,Completed,11,Priya,91,
+6/21/2026,8:00 PM,5,Duval Party,Completed,13,Tom,80,Window request
+6/21/2026,6:00 PM,2,Kim Party,Completed,5,Marco,78,VIP
+6/21/2026,8:00 PM,3,Duval Party,Completed,6,Tom,101,
+6/21/2026,7:30 PM,2,Kim Party,Completed,7,Marco,87,Anniversary
+6/23/2026,7:30 PM,4,Hayes Party,Completed,7,Jules,121,
+6/23/2026,9:00 PM,4,Lee Party,Completed,11,Marco,86,
+6/23/2026,5:45 PM,2,Okafor Party,Completed,5,Priya,71,
+6/23/2026,7:30 PM,3,Kim Party,Completed,12,Priya,104,
+6/23/2026,7:30 PM,2,Garcia Party,Completed,9,Priya,90,
+6/23/2026,7:00 PM,5,Hayes Party,Completed,2,Priya,88,Anniversary
+6/24/2026,7:15 PM,3,Hayes Party,Completed,3,Priya,101,
+6/24/2026,7:45 PM,4,Duval Party,Completed,12,Jules,95,
+6/24/2026,8:00 PM,3,Garcia Party,Completed,2,Priya,91,Anniversary
+6/24/2026,5:15 PM,4,Kim Party,Completed,2,Dana,118,
+6/24/2026,6:30 PM,4,Fischer Party,Completed,4,Priya,92,Birthday
+6/24/2026,5:00 PM,2,Garcia Party,Completed,7,Marco,100,Birthday
+6/24/2026,7:45 PM,8,Hayes Party,Completed,6,Priya,89,
+6/24/2026,7:30 PM,2,Marsh Party,Completed,3,Priya,82,Regular
+6/24/2026,6:45 PM,4,Brandt Party,Completed,8,Tom,69,Anniversary
+6/25/2026,6:00 PM,2,Marsh Party,Completed,13,Marco,81,Regular
+6/25/2026,9:15 PM,4,Kim Party,Completed,2,Priya,93,
+6/25/2026,7:45 PM,2,Okafor Party,Completed,3,Marco,85,Anniversary
+6/25/2026,7:15 PM,2,Ortiz Party,Completed,3,Marco,99,
+6/25/2026,7:15 PM,2,Brandt Party,Completed,8,Jules,105,Birthday
+6/25/2026,8:15 PM,4,Lee Party,Completed,7,Marco,114,Birthday
+6/25/2026,7:30 PM,2,Garcia Party,Completed,6,Jules,100,
+6/25/2026,8:45 PM,5,Hayes Party,Completed,10,Dana,72,
+6/25/2026,7:45 PM,2,Marsh Party,Completed,8,Tom,85,Window request
+6/25/2026,6:30 PM,2,Garcia Party,Completed,2,Marco,87,Window request
+6/25/2026,9:45 PM,5,Duval Party,Completed,12,Dana,75,Regular
+6/25/2026,5:45 PM,8,Nguyen Party,Completed,12,Dana,80,Window request
+6/26/2026,8:00 PM,2,Lee Party,Completed,10,Priya,88,Birthday
+6/26/2026,6:30 PM,6,Marsh Party,Completed,13,Tom,95,Birthday
+6/26/2026,8:30 PM,2,Okafor Party,Cancelled,12,Tom,,Birthday
+6/26/2026,5:15 PM,4,Garcia Party,Completed,4,Marco,103,Anniversary
+6/26/2026,6:00 PM,4,Smith Party,Completed,4,Dana,100,
+6/26/2026,9:00 PM,2,Smith Party,Completed,1,Dana,102,
+6/26/2026,6:15 PM,3,Fischer Party,Completed,12,Tom,97,
+6/26/2026,5:45 PM,2,Garcia Party,Completed,13,Marco,62,Anniversary
+6/26/2026,7:00 PM,2,Lee Party,Completed,3,Dana,88,Birthday
+6/26/2026,7:00 PM,4,Smith Party,Completed,12,Jules,98,
+6/26/2026,8:15 PM,4,Marsh Party,Completed,2,Priya,95,
+6/26/2026,6:15 PM,2,Fischer Party,Completed,7,Dana,101,
+6/26/2026,8:45 PM,3,Garcia Party,Completed,7,Dana,103,
+6/26/2026,7:15 PM,2,Brandt Party,Completed,2,Tom,84,Anniversary
+6/26/2026,8:45 PM,5,Garcia Party,Completed,3,Jules,122,
+6/26/2026,7:00 PM,4,Brandt Party,Completed,2,Dana,89,Anniversary
+6/26/2026,6:30 PM,5,Marsh Party,Completed,12,Jules,92,
+6/26/2026,8:30 PM,5,Smith Party,Completed,6,Tom,104,Birthday
+6/27/2026,6:15 PM,3,Okafor Party,Completed,10,Dana,102,
+6/27/2026,7:00 PM,5,Okafor Party,Completed,4,Tom,90,Regular
+6/27/2026,8:00 PM,2,Lee Party,Completed,10,Tom,93,Window request
+6/27/2026,8:45 PM,3,Kim Party,Completed,5,Dana,102,Window request
+6/27/2026,6:30 PM,2,Brandt Party,Completed,3,Dana,83,Birthday
+6/27/2026,5:00 PM,5,Garcia Party,Completed,6,Priya,76,
+6/27/2026,7:15 PM,4,Duval Party,Completed,12,Tom,52,Anniversary
+6/27/2026,7:15 PM,4,Garcia Party,Completed,1,Jules,94,Window request
+6/27/2026,8:30 PM,2,Brandt Party,Completed,7,Dana,87,Anniversary
+6/27/2026,7:45 PM,4,Brandt Party,Completed,6,Tom,78,
+6/27/2026,9:45 PM,2,Lee Party,Completed,12,Priya,104,Regular
+6/27/2026,7:45 PM,3,Ortiz Party,Completed,8,Priya,78,
+6/27/2026,6:30 PM,3,Nguyen Party,Completed,9,Jules,66,
+6/27/2026,5:15 PM,2,Brandt Party,Completed,11,Dana,116,
+6/27/2026,8:45 PM,2,Ortiz Party,Completed,10,Dana,95,Window request
+6/27/2026,7:30 PM,2,Fischer Party,Completed,9,Priya,105,Anniversary
+6/28/2026,6:00 PM,6,Kim Party,Completed,13,Marco,94,Regular
+6/28/2026,8:00 PM,4,Duval Party,Completed,2,Marco,68,
+6/28/2026,7:15 PM,5,Duval Party,Completed,4,Marco,112,Anniversary
+6/28/2026,7:45 PM,2,Smith Party,Completed,12,Jules,97,Birthday
+6/28/2026,7:15 PM,2,Smith Party,Completed,7,Priya,83,
+6/28/2026,7:45 PM,2,Nguyen Party,Completed,8,Jules,67,
+6/28/2026,9:30 PM,2,Brandt Party,Completed,1,Jules,96,
+6/28/2026,7:30 PM,6,Duval Party,Completed,11,Dana,69,VIP
+6/28/2026,6:30 PM,2,Garcia Party,Completed,6,Priya,89,
+6/28/2026,5:45 PM,4,Duval Party,Cancelled,10,Jules,,
+6/30/2026,8:15 PM,4,Garcia Party,Completed,8,Priya,105,
+6/30/2026,6:00 PM,4,Hayes Party,Completed,5,Priya,81,Window request
+6/30/2026,9:45 PM,4,Nguyen Party,Completed,2,Jules,91,
+6/30/2026,6:00 PM,4,Okafor Party,No Show,3,Tom,,Birthday
+6/30/2026,5:00 PM,5,Duval Party,Completed,10,Priya,80,
+6/30/2026,6:30 PM,8,Fischer Party,Completed,13,Tom,105,
+6/30/2026,8:00 PM,4,Garcia Party,Completed,11,Marco,71,
+6/30/2026,6:00 PM,3,Marsh Party,Completed,8,Tom,86,
+6/30/2026,5:45 PM,8,Nguyen Party,Completed,4,Tom,95,
+7/1/2026,9:15 PM,2,Okafor Party,Completed,8,Tom,94,Window request
+7/1/2026,7:45 PM,2,Ortiz Party,Completed,8,Marco,96,Regular
+7/1/2026,7:45 PM,3,Brandt Party,Completed,5,Jules,113,Anniversary
+7/1/2026,8:30 PM,3,Fischer Party,Completed,10,Jules,98,
+7/1/2026,9:45 PM,4,Duval Party,Completed,9,Tom,103,
+7/1/2026,6:15 PM,2,Ortiz Party,Completed,9,Jules,90,
+7/1/2026,5:30 PM,2,Duval Party,Completed,8,Marco,76,Anniversary
+7/1/2026,9:45 PM,5,Marsh Party,Completed,6,Dana,83,Anniversary
+7/2/2026,9:15 PM,2,Duval Party,Completed,6,Priya,80,
+7/2/2026,6:30 PM,4,Marsh Party,Completed,3,Priya,72,Regular
+7/2/2026,6:45 PM,6,Smith Party,Completed,9,Dana,95,Anniversary
+7/2/2026,7:00 PM,2,Marsh Party,Completed,13,Marco,109,Window request
+7/2/2026,8:00 PM,2,Fischer Party,Completed,11,Marco,98,Window request
+7/2/2026,6:45 PM,2,Nguyen Party,Completed,8,Jules,69,Birthday
+7/2/2026,9:30 PM,2,Smith Party,Completed,3,Marco,117,Anniversary
+7/2/2026,9:45 PM,4,Ortiz Party,Completed,13,Priya,94,Anniversary
+7/2/2026,8:15 PM,5,Ortiz Party,Completed,5,Tom,84,
+7/2/2026,5:15 PM,5,Brandt Party,Completed,5,Tom,85,
+7/2/2026,7:45 PM,3,Fischer Party,Completed,4,Tom,80,
+7/2/2026,8:00 PM,4,Garcia Party,Completed,3,Marco,83,Window request
+7/3/2026,5:00 PM,8,Duval Party,Completed,5,Marco,96,Anniversary
+7/3/2026,6:45 PM,6,Marsh Party,Completed,8,Jules,84,
+7/3/2026,8:30 PM,4,Brandt Party,Completed,4,Jules,88,Anniversary
+7/3/2026,8:15 PM,2,Brandt Party,Completed,7,Jules,94,Regular
+7/3/2026,9:00 PM,2,Kim Party,Completed,11,Tom,83,Anniversary
+7/3/2026,7:30 PM,4,Kim Party,Completed,8,Dana,89,Birthday
+7/3/2026,9:15 PM,2,Brandt Party,Completed,7,Priya,77,
+7/3/2026,8:15 PM,4,Hayes Party,Completed,7,Priya,108,Birthday
+7/3/2026,5:30 PM,3,Brandt Party,Completed,4,Tom,85,Regular
+7/3/2026,7:00 PM,4,Marsh Party,Completed,5,Jules,108,Anniversary
+7/3/2026,8:00 PM,2,Okafor Party,Completed,10,Dana,77,
+7/3/2026,8:15 PM,2,Nguyen Party,Completed,9,Jules,79,Birthday
+7/3/2026,5:00 PM,2,Garcia Party,Completed,13,Marco,90,
+7/3/2026,9:00 PM,2,Marsh Party,Completed,7,Tom,103,
+7/3/2026,9:30 PM,4,Hayes Party,Completed,5,Priya,84,
+7/4/2026,6:00 PM,4,Hayes Party,Completed,9,Priya,99,Anniversary
+7/4/2026,9:00 PM,2,Okafor Party,Completed,13,Priya,97,
+7/4/2026,9:15 PM,4,Marsh Party,Completed,4,Priya,107,VIP
+7/4/2026,7:15 PM,3,Duval Party,Completed,7,Dana,104,Window request
+7/4/2026,7:45 PM,2,Fischer Party,Completed,8,Priya,100,Birthday
+7/4/2026,6:00 PM,3,Duval Party,No Show,6,Dana,,
+7/4/2026,9:15 PM,2,Hayes Party,Completed,2,Dana,88,
+7/4/2026,8:30 PM,2,Garcia Party,Completed,10,Tom,97,
+7/4/2026,8:30 PM,4,Marsh Party,Completed,4,Dana,84,
+7/4/2026,9:15 PM,2,Nguyen Party,Completed,8,Priya,85,Window request
+7/4/2026,9:00 PM,2,Garcia Party,Completed,10,Tom,103,
+7/4/2026,7:45 PM,4,Lee Party,Completed,6,Priya,86,
+7/4/2026,7:45 PM,2,Hayes Party,Completed,5,Jules,104,
+7/4/2026,6:00 PM,4,Nguyen Party,Completed,6,Marco,101,
+7/4/2026,5:00 PM,4,Lee Party,Completed,2,Jules,73,Window request
+7/4/2026,7:45 PM,3,Lee Party,Cancelled,11,Dana,,
+7/5/2026,8:00 PM,4,Lee Party,Completed,6,Priya,94,Window request
+7/5/2026,7:30 PM,4,Smith Party,Completed,3,Tom,80,VIP
+7/5/2026,7:45 PM,3,Kim Party,Completed,13,Tom,81,
+7/5/2026,7:30 PM,4,Smith Party,Completed,6,Jules,87,
+7/5/2026,7:30 PM,4,Fischer Party,Completed,8,Priya,87,
+7/5/2026,7:00 PM,5,Lee Party,Completed,8,Jules,83,
+7/5/2026,7:00 PM,2,Marsh Party,Completed,7,Tom,95,Window request
+7/5/2026,9:45 PM,3,Brandt Party,Completed,10,Priya,107,Anniversary
+7/5/2026,7:15 PM,4,Brandt Party,Completed,12,Tom,99,
+7/5/2026,6:15 PM,5,Fischer Party,Completed,3,Priya,102,
+7/5/2026,7:00 PM,4,Ortiz Party,Completed,10,Jules,84,Regular
+7/5/2026,8:30 PM,2,Nguyen Party,Completed,10,Priya,108,
+7/5/2026,5:30 PM,6,Kim Party,Completed,7,Marco,89,
+7/5/2026,8:15 PM,3,Brandt Party,Completed,3,Priya,86,
+7/7/2026,8:30 PM,2,Ortiz Party,Completed,5,Marco,102,Anniversary
+7/7/2026,7:45 PM,3,Duval Party,Completed,9,Marco,105,
+7/7/2026,9:30 PM,3,Marsh Party,Completed,11,Tom,99,
+7/7/2026,6:15 PM,4,Lee Party,Completed,10,Tom,79,
+7/7/2026,8:45 PM,2,Duval Party,Completed,11,Jules,86,VIP
+7/7/2026,5:00 PM,2,Lee Party,No Show,10,Dana,,
+7/7/2026,5:45 PM,2,Smith Party,Completed,6,Marco,102,
+7/7/2026,9:30 PM,2,Lee Party,Completed,2,Dana,110,
+7/8/2026,6:00 PM,2,Brandt Party,Completed,13,Marco,95,Birthday
+7/8/2026,5:30 PM,2,Nguyen Party,Completed,8,Jules,115,
+7/8/2026,6:15 PM,3,Fischer Party,Completed,9,Marco,86,Birthday
+7/8/2026,7:30 PM,4,Smith Party,Completed,2,Dana,96,
+7/8/2026,5:00 PM,8,Lee Party,Completed,2,Marco,121,Birthday
+7/8/2026,7:45 PM,2,Okafor Party,Completed,4,Tom,88,Regular
+7/9/2026,8:15 PM,4,Fischer Party,Completed,13,Priya,83,
+7/9/2026,8:00 PM,4,Lee Party,Completed,13,Tom,70,Regular
+7/9/2026,5:45 PM,8,Fischer Party,Completed,13,Priya,89,
+7/9/2026,5:15 PM,2,Hayes Party,Cancelled,3,Priya,,Window request
+7/9/2026,8:45 PM,4,Brandt Party,Cancelled,3,Priya,,
+7/9/2026,5:15 PM,4,Nguyen Party,Completed,5,Jules,119,
+7/9/2026,8:30 PM,2,Fischer Party,Completed,12,Dana,83,
+7/9/2026,8:45 PM,6,Kim Party,Completed,9,Priya,98,
+7/9/2026,8:45 PM,3,Fischer Party,Completed,4,Jules,100,Regular
+7/9/2026,9:30 PM,4,Duval Party,Completed,8,Dana,81,VIP
+7/9/2026,5:45 PM,2,Kim Party,Completed,7,Tom,111,
+7/10/2026,8:00 PM,4,Okafor Party,No Show,13,Priya,,
+7/10/2026,6:00 PM,2,Kim Party,Completed,10,Tom,100,
+7/10/2026,6:45 PM,2,Smith Party,Completed,13,Jules,112,Anniversary
+7/10/2026,5:15 PM,4,Garcia Party,Completed,8,Dana,96,
+7/10/2026,6:45 PM,4,Smith Party,Completed,6,Tom,87,Window request
+7/10/2026,7:15 PM,5,Nguyen Party,Completed,8,Tom,84,VIP
+7/10/2026,7:00 PM,2,Lee Party,Completed,4,Marco,79,Window request
+7/10/2026,7:30 PM,4,Smith Party,Completed,5,Priya,84,
+7/10/2026,8:45 PM,6,Okafor Party,Completed,4,Jules,90,
+7/10/2026,8:45 PM,3,Brandt Party,Completed,5,Jules,93,Window request
+7/10/2026,6:30 PM,3,Brandt Party,No Show,4,Priya,,Window request
+7/10/2026,5:45 PM,4,Brandt Party,Completed,12,Tom,78,Regular
+7/10/2026,6:00 PM,2,Nguyen Party,Cancelled,6,Marco,,
+7/10/2026,9:45 PM,2,Ortiz Party,Completed,13,Tom,114,Anniversary
+7/10/2026,6:45 PM,2,Brandt Party,Completed,6,Dana,76,Window request
+7/10/2026,7:15 PM,4,Brandt Party,Completed,6,Priya,105,VIP
+7/10/2026,7:45 PM,4,Hayes Party,Completed,7,Priya,97,
+7/11/2026,6:00 PM,2,Kim Party,Completed,13,Dana,94,Window request
+7/11/2026,8:45 PM,6,Lee Party,Completed,11,Tom,71,Birthday
+7/11/2026,5:45 PM,2,Hayes Party,Completed,5,Marco,98,
+7/11/2026,5:30 PM,6,Hayes Party,Completed,11,Marco,106,
+7/11/2026,5:15 PM,4,Fischer Party,Completed,6,Tom,79,
+7/11/2026,6:45 PM,5,Brandt Party,Completed,9,Jules,109,Birthday
+7/11/2026,6:00 PM,2,Fischer Party,Completed,9,Tom,112,Birthday
+7/11/2026,7:45 PM,2,Ortiz Party,Completed,9,Priya,94,
+7/11/2026,8:45 PM,4,Marsh Party,Cancelled,2,Tom,,VIP
+7/11/2026,9:45 PM,4,Lee Party,Completed,8,Jules,67,
+7/11/2026,5:00 PM,2,Nguyen Party,Completed,1,Marco,104,Birthday
+7/11/2026,6:15 PM,4,Smith Party,Completed,3,Priya,90,
+7/11/2026,8:00 PM,5,Ortiz Party,Completed,3,Marco,93,VIP
+7/11/2026,8:45 PM,2,Fischer Party,Completed,12,Marco,92,
+7/11/2026,8:30 PM,3,Kim Party,Completed,2,Priya,114,
+7/11/2026,8:00 PM,2,Kim Party,Completed,7,Dana,94,
+7/11/2026,9:00 PM,2,Fischer Party,No Show,5,Tom,,
+7/11/2026,8:45 PM,5,Duval Party,Completed,13,Jules,110,VIP
+7/12/2026,9:45 PM,3,Okafor Party,Cancelled,11,Dana,,
+7/12/2026,5:30 PM,2,Lee Party,Completed,7,Tom,82,Anniversary
+7/12/2026,8:00 PM,4,Okafor Party,Completed,6,Priya,99,
+7/12/2026,5:15 PM,6,Brandt Party,Completed,7,Tom,70,Regular
+7/12/2026,6:15 PM,3,Kim Party,Completed,1,Dana,92,Anniversary
+7/12/2026,6:15 PM,2,Fischer Party,Completed,3,Marco,110,Regular
+7/12/2026,9:15 PM,8,Okafor Party,Completed,3,Dana,82,VIP
+7/12/2026,5:45 PM,2,Duval Party,No Show,6,Tom,,
+7/12/2026,7:45 PM,6,Garcia Party,Completed,8,Dana,74,
+7/12/2026,7:45 PM,4,Ortiz Party,Completed,9,Priya,70,Anniversary
+7/14/2026,7:15 PM,6,Nguyen Party,Completed,2,Jules,112,
+7/14/2026,5:45 PM,2,Lee Party,Completed,2,Priya,104,Window request
+7/14/2026,6:00 PM,4,Smith Party,Completed,6,Dana,87,VIP
+7/14/2026,8:00 PM,2,Kim Party,Completed,6,Jules,99,
+7/14/2026,6:15 PM,2,Kim Party,Cancelled,10,Jules,,
+7/14/2026,6:45 PM,4,Marsh Party,Completed,11,Dana,116,Window request
+7/14/2026,6:15 PM,2,Brandt Party,Completed,9,Marco,88,
+7/15/2026,5:00 PM,4,Smith Party,Cancelled,13,Marco,,Regular
+7/15/2026,7:45 PM,2,Lee Party,Completed,12,Dana,107,
+7/15/2026,5:15 PM,4,Ortiz Party,Completed,5,Priya,68,Birthday
+7/15/2026,8:30 PM,4,Hayes Party,Completed,13,Dana,69,Window request
+7/15/2026,5:30 PM,4,Fischer Party,Completed,10,Marco,107,
+7/15/2026,8:30 PM,2,Nguyen Party,Completed,8,Tom,93,Window request
+7/15/2026,6:45 PM,2,Lee Party,Completed,8,Priya,88,
+7/15/2026,7:00 PM,4,Okafor Party,Completed,1,Tom,85,
+7/16/2026,8:00 PM,4,Smith Party,Completed,13,Dana,102,
+7/16/2026,9:15 PM,4,Nguyen Party,Completed,9,Tom,115,
+7/16/2026,6:45 PM,2,Smith Party,Completed,8,Dana,104,
+7/16/2026,6:15 PM,5,Marsh Party,Completed,4,Priya,98,
+7/16/2026,7:15 PM,2,Hayes Party,Completed,9,Marco,118,
+7/16/2026,8:00 PM,3,Fischer Party,Completed,11,Tom,92,VIP
+7/16/2026,6:45 PM,4,Lee Party,Completed,9,Priya,85,
+7/16/2026,6:15 PM,5,Ortiz Party,Completed,5,Priya,115,
+7/16/2026,7:45 PM,8,Fischer Party,Completed,6,Priya,87,
+7/16/2026,8:30 PM,2,Hayes Party,Completed,1,Jules,82,
+7/17/2026,6:30 PM,2,Ortiz Party,Completed,9,Tom,87,
+7/17/2026,6:15 PM,4,Ortiz Party,Cancelled,2,Priya,,Regular
+7/17/2026,7:15 PM,2,Marsh Party,Completed,8,Jules,74,
+7/17/2026,6:30 PM,4,Brandt Party,Completed,3,Dana,96,
+7/17/2026,8:00 PM,2,Garcia Party,Completed,2,Marco,94,
+7/17/2026,8:15 PM,4,Fischer Party,Completed,11,Jules,93,Window request
+7/17/2026,7:30 PM,4,Marsh Party,Completed,3,Jules,117,Anniversary
+7/17/2026,7:15 PM,5,Okafor Party,Completed,8,Dana,92,Regular
+7/17/2026,8:15 PM,2,Kim Party,Completed,12,Tom,56,Birthday
+7/17/2026,9:00 PM,4,Kim Party,Completed,7,Jules,83,Birthday
+7/17/2026,6:15 PM,4,Lee Party,Completed,11,Jules,115,Window request
+7/17/2026,7:15 PM,2,Ortiz Party,Completed,2,Priya,95,
+7/17/2026,7:15 PM,4,Garcia Party,Completed,1,Marco,101,
+7/17/2026,8:15 PM,2,Ortiz Party,No Show,11,Dana,,Anniversary
+7/17/2026,7:45 PM,2,Lee Party,Completed,7,Jules,102,Birthday
+7/17/2026,7:30 PM,2,Duval Party,Completed,12,Dana,86,VIP
+7/17/2026,9:15 PM,2,Marsh Party,Completed,10,Tom,61,
+7/17/2026,8:00 PM,4,Okafor Party,Completed,8,Dana,110,
+7/18/2026,5:00 PM,3,Lee Party,Completed,5,Dana,86,VIP
+7/18/2026,6:45 PM,5,Kim Party,Cancelled,10,Jules,,Regular
+7/18/2026,8:15 PM,5,Garcia Party,Completed,1,Dana,82,Window request
+7/18/2026,9:00 PM,5,Hayes Party,Completed,8,Priya,95,
+7/18/2026,7:00 PM,2,Hayes Party,Completed,7,Marco,102,
+7/18/2026,7:00 PM,3,Duval Party,Cancelled,6,Marco,,Regular
+7/18/2026,7:30 PM,3,Lee Party,Completed,9,Tom,79,Window request
+7/18/2026,6:15 PM,5,Fischer Party,Completed,7,Jules,100,
+7/18/2026,7:00 PM,3,Lee Party,Completed,6,Marco,72,
+7/18/2026,7:30 PM,2,Brandt Party,Completed,6,Priya,103,
+7/18/2026,7:15 PM,2,Kim Party,Completed,8,Tom,101,
+7/18/2026,6:45 PM,4,Brandt Party,Completed,7,Dana,82,VIP
+7/18/2026,8:30 PM,2,Lee Party,No Show,12,Tom,,
+7/18/2026,6:15 PM,4,Nguyen Party,Completed,1,Jules,89,Regular
+7/18/2026,6:00 PM,4,Smith Party,Completed,11,Tom,92,Regular
+7/18/2026,6:15 PM,2,Lee Party,Completed,7,Marco,89,
+7/18/2026,7:15 PM,5,Fischer Party,Completed,10,Dana,99,
+7/18/2026,7:30 PM,3,Kim Party,Completed,6,Jules,119,Window request
+7/18/2026,8:00 PM,4,Nguyen Party,Completed,4,Priya,80,
+7/18/2026,5:00 PM,4,Garcia Party,Completed,12,Marco,96,VIP
