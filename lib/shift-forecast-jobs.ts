@@ -126,7 +126,29 @@ export async function scoreForecastAccuracy(restaurantId: string, date: string) 
   for (const [zone, actual] of zoneActual) zoneError += Math.abs(Number(actual) / zoneTotal - (expectedZones.get(zone) || 0));
   zoneError = Math.min(1, zoneError / 2);
   const errorScore = Number((0.45 * Math.min(1, coverError) + 0.2 * Math.min(1, splitError) + 0.15 * Math.min(1, turnError) + 0.1 * zoneError + 0.1 * Math.min(1, lastOutError)).toFixed(4));
-  const actual = { covers: actualCovers, reservations: actualReservations, walkIns: actualWalkIns, averageTurnMinutes: actualTurn, lastTableOutMinutes: lastOuts.length ? Math.max(...lastOuts) : null, sections: Object.fromEntries(zoneActual) };
+  // POS shared-DB link: money actuals ride along so forecasts get scored
+  // (and future forecasts anchored) on revenue, not just covers. Guarded —
+  // a restaurant without POS activity records the same shape as before.
+  let revenue: { revenueCents: number; tipCents: number; paidChecks: number; avgPpaCents: number | null } | null = null;
+  try {
+    const paidSessions = await prisma.tableSession.findMany({
+      where: { restaurantId, serviceDate, totalCents: { not: null } },
+      select: { totalCents: true, tipCents: true, ppaCents: true },
+    });
+    if (paidSessions.length) {
+      const revenueCents = paidSessions.reduce((sum, row) => sum + (row.totalCents ?? 0), 0);
+      const ppas = paidSessions.map((row) => row.ppaCents).filter((value): value is number => value != null && value > 0);
+      revenue = {
+        revenueCents,
+        tipCents: paidSessions.reduce((sum, row) => sum + (row.tipCents ?? 0), 0),
+        paidChecks: paidSessions.length,
+        avgPpaCents: ppas.length ? Math.round(ppas.reduce((sum, value) => sum + value, 0) / ppas.length) : null,
+      };
+    }
+  } catch (err) {
+    console.warn("[forecast-jobs] pos revenue unavailable:", err);
+  }
+  const actual = { covers: actualCovers, reservations: actualReservations, walkIns: actualWalkIns, averageTurnMinutes: actualTurn, lastTableOutMinutes: lastOuts.length ? Math.max(...lastOuts) : null, sections: Object.fromEntries(zoneActual), ...(revenue ? { pos: revenue } : {}) };
   try {
     await prisma.forecastAccuracy.create({ data: { restaurantId, date: shiftDate, predicted: payload, actual, errorScore, triggeredRerun: false } });
   } catch {

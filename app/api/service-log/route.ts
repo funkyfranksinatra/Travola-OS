@@ -14,6 +14,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireRestaurantId } from "@/lib/tenant";
 import { dbTablesToAppTableId, serviceDateOf, todayKey, toTimeStr } from "@/lib/db-mappers";
+import { emitServiceEvents } from "@/lib/service-events";
 
 const originOf = (source: string) => (source === "WALK_IN" ? "walk-in" : "reservation");
 
@@ -156,6 +157,14 @@ export async function POST(req: Request) {
       where: { id: target.id, restaurantId },
       data: { status: "FINISHED", finishedTime: now, turnMinutes },
     });
+    // Shared-DB link: reservation close-out onto the event bus (the floor
+    // clear itself also emits TABLE_CLEARED via the live-state differ).
+    await emitServiceEvents(restaurantId, [{
+      source: "os",
+      type: "TABLE_FINISHED",
+      partyKey: target.id,
+      payload: { turnMinutes, via: "service_log" },
+    }]);
     return Response.json({ ok: true, finished: target.id, turnMinutes });
   } catch (err) {
     console.error("[api/service-log POST]", err);

@@ -1099,7 +1099,7 @@ function TableCreatorSidebar({ addTable, activeFloorName = 'Floor', tableCount =
 }
 
 function FloorMap({
-  hydrated = false, onSeatPartyDrop, tables, selectedTableId, setSelectedTableId, setSelectedReservationId, selectedPartyId, setSelectedPartyId, waitlist, reservations = [], allReservations = [], viewDate = null, setViewDate,
+  hydrated = false, onSeatPartyDrop, tables, posByTable = {}, selectedTableId, setSelectedTableId, setSelectedReservationId, selectedPartyId, setSelectedPartyId, waitlist, reservations = [], allReservations = [], viewDate = null, setViewDate,
   editMode, setEditMode, mergeMode, setMergeMode, mergeSelection, setMergeSelection,
   newCapacity, setNewCapacity, newTableShape = 'square', setNewTableShape, newTableArea = 'dining', setNewTableArea, addTable, deleteTable,
   dragState, setDragState, moveSourceId, setMoveSourceId,
@@ -2623,6 +2623,21 @@ function FloorMap({
                       anchored them to the tile's local bottom edge, which
                       a 90°/270° rotation remapped to a visual SIDE — the
                       "time floating off the left of the table" artifact. */}
+                  {/* POS check chip — live total while the check is open,
+                      green PAID once it settles (party still seated =
+                      "ready to turn" signal for the host). Only rendered
+                      on occupied/bussing tables so a stale summary can
+                      never label an empty table. */}
+                  {!editMode && (() => {
+                    const chk = posByTable[String(t.id)];
+                    if (!chk || !['seated', 'dining', 'bussing'].includes(effStatus)) return null;
+                    const paid = chk.paidAt != null;
+                    return (
+                      <span className={`mt-0.5 px-1 py-[1px] rounded font-mono text-[7px] leading-none font-bold tracking-wider ${paid ? 'bg-emerald-950/90 text-emerald-300 border border-emerald-500/50' : isBussingTile ? 'bg-yellow-900/60 text-yellow-100 border border-yellow-700/60' : 'bg-gray-950/80 text-gray-200 border border-gray-700/50'}`}>
+                        {paid ? 'PAID' : `$${Math.round(chk.totalCents / 100)}${chk.course > 1 ? ` · C${chk.course}` : ''}`}
+                      </span>
+                    );
+                  })()}
                   {tableReservations.length > 0 && (
                     <div className="flex flex-wrap justify-center gap-1 mt-1 z-10" style={{ maxWidth: Math.max(44, getTableSizePx(t.shape, t.capacity).width - 12) }}>
                       {tableReservations.map(res => (
@@ -7057,7 +7072,7 @@ function ServiceView({ serviceLog, now, onRefresh, onOpenTable, dateLabel = null
   );
 }
 
-function TableDetailsPanel({ table, servers, now, reservations = [], shiftWindow = null, viewDateStr = null, onClose, onMarkBussing, onClearTable, onOpenReservation, onEditParty, onMoveParty, onToggleAiExcluded, onToggleOnlineBlocked, setMergeMode, setMergeSelection, unmergeTable, overlay = false }) {
+function TableDetailsPanel({ table, servers, now, check = null, reservations = [], shiftWindow = null, viewDateStr = null, onClose, onMarkBussing, onClearTable, onOpenReservation, onEditParty, onMoveParty, onToggleAiExcluded, onToggleOnlineBlocked, setMergeMode, setMergeSelection, unmergeTable, overlay = false }) {
   if (!table) return null;
 
   const assignedServer = servers.find(s => s.id === table.assignedServerId);
@@ -7174,6 +7189,25 @@ function TableDetailsPanel({ table, servers, now, reservations = [], shiftWindow
         <VitalRow label="Waiter" value={serverName}   muted={!assignedServer} />
         <VitalRow label="Party"  value={partyValue}   muted={!hasPartyData} />
         <VitalRow label="Seated" value={elapsedValue} muted={!table.startedAt} />
+        {/* POS shared-DB link: the table's live check. Rendered only
+            when a check exists so pre-POS rooms see the panel unchanged. */}
+        {check && (isOccupied || isBussing) && (
+          <>
+            <VitalRow
+              label="Check"
+              value={`$${(check.totalCents / 100).toFixed(2)}${check.course > 1 ? ` · course ${check.course}` : ''}`}
+            />
+            <VitalRow
+              label={check.paidAt != null ? "Paid" : "Kitchen"}
+              value={check.paidAt != null
+                ? `${Math.max(0, Math.floor((now - check.paidAt) / 60000))} min ago`
+                : check.lastFireAt != null
+                  ? `fired ${Math.max(0, Math.floor((now - check.lastFireAt) / 60000))}m ago`
+                  : "nothing fired"}
+              muted={check.paidAt == null && check.lastFireAt == null}
+            />
+          </>
+        )}
       </div>
 
       {/* Schedule — upcoming reservations attached to this table. Slips
@@ -8212,6 +8246,14 @@ export default function Home({ hostMode = false } = {}) {
   const [floorUnderlays, setFloorUnderlays] = useState({});
   const [showUnderlay, setShowUnderlay] = useState(true);
   const [toastState, setToastState] = useState({ msg: null, kind: 'blocked' });
+  // ── POS shared-DB link: live check state per table ──────────────────
+  // Populated from /api/floor's per-table `check` summaries and kept
+  // fresh by tailing /api/events (the OS↔POS bus). Deliberately SEPARATE
+  // from `tables` state: the floor's optimistic local world is never
+  // clobbered by a poll, and PATCH snapshots never echo check data back.
+  const [posByTable, setPosByTable] = useState({});
+  const posCursorRef = useRef(null);
+  const posPaidToastedRef = useRef(new Set());
   const toast = toastState.msg;
   const toastKind = toastState.kind;
   // Message + status are set together, so a block can never inherit the
@@ -8222,6 +8264,55 @@ export default function Home({ hostMode = false } = {}) {
   const setToast = useCallback((msg) => setToastState({ msg, kind: 'blocked' }), []);
   const setToastOk = useCallback((msg) => setToastState({ msg, kind: 'ok' }), []);
   const [now,              setNow]              = useState(() => Date.now());
+
+  // Tail the service-event bus for POS activity (5s, the KDS cadence).
+  // A cursor of null means "not initialized" — the first request returns
+  // the current seq with no backlog, so a fresh page never replays the
+  // day. Check summaries are re-pulled from /api/floor only when POS
+  // events actually arrived. CHECK_PAID on a still-seated table raises
+  // the advisory clear prompt (toast — advisory, never autopilot).
+  const refreshPosChecks = useCallback(async () => {
+    try {
+      const r = await fetch('/api/floor');
+      if (!r.ok) return;
+      const f = await r.json();
+      if (!Array.isArray(f.tables)) return;
+      const map = {};
+      for (const t of f.tables) if (t.check) map[String(t.id)] = t.check;
+      setPosByTable(map);
+    } catch { /* next poll retries */ }
+  }, []);
+  useEffect(() => {
+    let stopped = false;
+    const tick = async () => {
+      try {
+        const since = posCursorRef.current;
+        const url = since == null
+          ? '/api/events'
+          : `/api/events?since=${since}&types=CHECK_OPENED,COURSE_FIRED,COURSE_BUMPED,CHECK_PAID,CHECK_CLOSED,ITEM_86`;
+        const r = await fetch(url);
+        if (!r.ok || stopped) return;
+        const data = await r.json();
+        if (typeof data.cursor === 'number') posCursorRef.current = data.cursor;
+        const events = Array.isArray(data.events) ? data.events : [];
+        if (!events.length) return;
+        await refreshPosChecks();
+        for (const ev of events) {
+          if (ev.type !== 'CHECK_PAID' || !ev.checkId || posPaidToastedRef.current.has(ev.checkId)) continue;
+          posPaidToastedRef.current.add(ev.checkId);
+          const tableId = Array.isArray(ev.tableIds) ? ev.tableIds[0] : null;
+          const tbl = tableId != null ? tablesRef.current.find(x => String(x.id) === String(tableId)) : null;
+          if (tbl && (tbl.status === 'seated' || tbl.status === 'dining')) {
+            const cents = Number(ev.payload && ev.payload.totalCents);
+            setToastOk(`${tbl.name} paid${Number.isFinite(cents) ? ` $${(cents / 100).toFixed(2)}` : ''} — table ready to clear when they leave`);
+          }
+        }
+      } catch { /* transient — next poll retries */ }
+    };
+    tick();
+    const id = setInterval(tick, 5000);
+    return () => { stopped = true; clearInterval(id); };
+  }, [refreshPosChecks, setToastOk]);
 
   // ─── Date filters ────────────────────────────────────────────────
   // todayStr is the YYYY-MM-DD key for "right now" — recomputed when
@@ -9660,8 +9751,13 @@ export default function Home({ hostMode = false } = {}) {
             // The route already applies the daily-reset rule: stale live
             // state (previous service day) arrives pre-cleaned, fresh
             // state arrives intact — occupied, bussing, merges, sections.
+            // POS shared-DB link: check summaries ride the same payload.
+            const seededChecks = {};
+            for (const t of f.tables) if (t.check) seededChecks[String(t.id)] = t.check;
+            setPosByTable(seededChecks);
             setTables(f.tables.map(t => ({
               ...t,
+              check: undefined, // lives in posByTable, not floor state
               status: t.status || 'available',
               party: t.party ?? null,
               partySize: t.partySize ?? null,
@@ -10312,7 +10408,7 @@ export default function Home({ hostMode = false } = {}) {
         }} reservationsDisabled={viewingPast} walkInDisabled={viewingPast || viewingFuture} now={now} aiReason={aiReason} servers={viewServers} staffReadOnly={viewingPast} onPartyDragStart={onPartyDragStart} onPartyDragEnd={onPartyDragEnd} onPartyTouchStart={beginPartyTouchDrag} partyRowsDraggable={!coarsePointer} addServer={addServer} toggleServerShift={toggleServerShift} setServerAiExcluded={setServerAiExcluded} isAssignMode={isAssignMode} setIsAssignMode={setIsAssignMode} assignSelectedServer={assignSelectedServer} setAssignSelectedServer={setAssignSelectedServer} handleAIAssign={handleAIAssign} aiAssignLoading={aiAssignLoading} setEditMode={setEditMode} setMergeMode={setMergeMode} setMergeSelection={setMergeSelection} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} />
         )}
         <main className="flex-1 flex flex-col overflow-hidden">
-          {activeTab === "floor" && (<div className="flex-1 flex overflow-hidden min-h-0 relative"><FloorMap hostMode={hostMode} serviceLogOpen={hostServiceLogOpen} onToggleServiceLog={() => setHostServiceLogOpen(v => !v)} hydrated={hydrated} onSeatPartyDrop={onSeatPartyDrop} tables={viewTables} selectedTableId={selectedTableId} setSelectedTableId={setSelectedTableId} setSelectedReservationId={setSelectedReservationId} selectedPartyId={selectedPartyId} setSelectedPartyId={setSelectedPartyId} waitlist={waitlist} reservations={viewDateReservations} allReservations={reservations} viewDate={viewDate} setViewDate={setViewDate} editMode={editMode} setEditMode={setEditMode} mergeMode={mergeMode} setMergeMode={setMergeMode} mergeSelection={mergeSelection} setMergeSelection={setMergeSelection} newCapacity={newCapacity} setNewCapacity={setNewCapacity} addTable={addTable} deleteTable={deleteTable} rotateTable={rotateTable} renameTable={renameTable} setTableCapacity={setTableCapacity} setTableShape={setTableShape} setTableArea={setTableArea} renameFloor={renameFloor} reorderFloors={reorderFloors} toggleTableManualOnly={toggleTableManualOnly} toggleTableOnlineExcluded={toggleTableOnlineExcluded} toggleFloorManualOnly={toggleFloorManualOnly} toggleFloorOnlineExcluded={toggleFloorOnlineExcluded} setFloorTablesManualOnly={setFloorTablesManualOnly} setFloorTablesOnlineExcluded={setFloorTablesOnlineExcluded} addFloor={addFloor} undo={undo} canUndo={editHistory.length > 0} dragState={dragState} setDragState={setDragState} moveSourceId={moveSourceId} setMoveSourceId={setMoveSourceId} attemptSeat={attemptSeat} clearTable={clearTable} moveParty={moveParty} now={now} aiSuggestedIds={aiSuggestedIds} aiSuggestedRawId={aiSuggestedRawId} servers={viewServers} isAssignMode={isAssignMode} assignSelectedServer={assignSelectedServer} assignTableToServer={assignTableToServer} setIsAssignMode={setIsAssignMode} setAssignSelectedServer={setAssignSelectedServer} viewingServerId={viewingServerId} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} newTableShape={newTableShape} setNewTableShape={setNewTableShape} newTableArea={newTableArea} setNewTableArea={setNewTableArea} reassignReservationId={reassignReservationId} setReassignReservationId={setReassignReservationId} updateReservationTable={updateReservationTable} assignReservationToTables={assignReservationToTables} onAssignConflictPrompt={(p) => setAssignOverride(p)} floors={floors} setFloors={setFloors} activeFloorId={activeFloorId} setActiveFloorId={setActiveFloorId} isAddingFloor={isAddingFloor} setIsAddingFloor={setIsAddingFloor} newFloorName={newFloorName} setNewFloorName={setNewFloorName} underlay={floorUnderlays[activeFloorId] || null} showUnderlay={showUnderlay} setShowUnderlay={setShowUnderlay} migrationActive={!!migrationBackup} onCancelMigration={cancelFloorMigration} deleteFloor={deleteFloor} />{!editMode && (((selectedPartyId || reassignReservationId) && !mergeMode)
+          {activeTab === "floor" && (<div className="flex-1 flex overflow-hidden min-h-0 relative"><FloorMap hostMode={hostMode} serviceLogOpen={hostServiceLogOpen} onToggleServiceLog={() => setHostServiceLogOpen(v => !v)} hydrated={hydrated} onSeatPartyDrop={onSeatPartyDrop} tables={viewTables} posByTable={posByTable} selectedTableId={selectedTableId} setSelectedTableId={setSelectedTableId} setSelectedReservationId={setSelectedReservationId} selectedPartyId={selectedPartyId} setSelectedPartyId={setSelectedPartyId} waitlist={waitlist} reservations={viewDateReservations} allReservations={reservations} viewDate={viewDate} setViewDate={setViewDate} editMode={editMode} setEditMode={setEditMode} mergeMode={mergeMode} setMergeMode={setMergeMode} mergeSelection={mergeSelection} setMergeSelection={setMergeSelection} newCapacity={newCapacity} setNewCapacity={setNewCapacity} addTable={addTable} deleteTable={deleteTable} rotateTable={rotateTable} renameTable={renameTable} setTableCapacity={setTableCapacity} setTableShape={setTableShape} setTableArea={setTableArea} renameFloor={renameFloor} reorderFloors={reorderFloors} toggleTableManualOnly={toggleTableManualOnly} toggleTableOnlineExcluded={toggleTableOnlineExcluded} toggleFloorManualOnly={toggleFloorManualOnly} toggleFloorOnlineExcluded={toggleFloorOnlineExcluded} setFloorTablesManualOnly={setFloorTablesManualOnly} setFloorTablesOnlineExcluded={setFloorTablesOnlineExcluded} addFloor={addFloor} undo={undo} canUndo={editHistory.length > 0} dragState={dragState} setDragState={setDragState} moveSourceId={moveSourceId} setMoveSourceId={setMoveSourceId} attemptSeat={attemptSeat} clearTable={clearTable} moveParty={moveParty} now={now} aiSuggestedIds={aiSuggestedIds} aiSuggestedRawId={aiSuggestedRawId} servers={viewServers} isAssignMode={isAssignMode} assignSelectedServer={assignSelectedServer} assignTableToServer={assignTableToServer} setIsAssignMode={setIsAssignMode} setAssignSelectedServer={setAssignSelectedServer} viewingServerId={viewingServerId} setViewingServerId={setViewingServerId} sectionView={sectionView} setSectionView={setSectionView} newTableShape={newTableShape} setNewTableShape={setNewTableShape} newTableArea={newTableArea} setNewTableArea={setNewTableArea} reassignReservationId={reassignReservationId} setReassignReservationId={setReassignReservationId} updateReservationTable={updateReservationTable} assignReservationToTables={assignReservationToTables} onAssignConflictPrompt={(p) => setAssignOverride(p)} floors={floors} setFloors={setFloors} activeFloorId={activeFloorId} setActiveFloorId={setActiveFloorId} isAddingFloor={isAddingFloor} setIsAddingFloor={setIsAddingFloor} newFloorName={newFloorName} setNewFloorName={setNewFloorName} underlay={floorUnderlays[activeFloorId] || null} showUnderlay={showUnderlay} setShowUnderlay={setShowUnderlay} migrationActive={!!migrationBackup} onCancelMigration={cancelFloorMigration} deleteFloor={deleteFloor} />{!editMode && (((selectedPartyId || reassignReservationId) && !mergeMode)
             ? <SeatingAssistRail aiThinking={aiThinking} selectedPartyId={selectedPartyId} reassignReservationId={reassignReservationId} reservations={reservations} waitlist={waitlist} tables={tables} aiSuggestedIds={aiSuggestedIds} onMerge={() => { setMergeMode(true); setMergeSelection([]); }} onCancel={() => { setSelectedPartyId(null); setReassignReservationId(null); }} />
             : (hostMode ? (hostServiceLogOpen && <ServiceRail overlay serviceLog={serviceLog} now={now} onOpenTable={openSeatedTable} onClose={() => setHostServiceLogOpen(false)} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />) : <ServiceRail serviceLog={serviceLog} now={now} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />))}</div>)}
           {activeTab === "service" && <ServiceView serviceLog={serviceLog} now={now} onRefresh={loadServiceLog} onOpenTable={openSeatedTable} dateLabel={viewDateStr === todayStr ? null : formatDateHuman(viewDateStr)} />}
@@ -10349,6 +10445,7 @@ export default function Home({ hostMode = false } = {}) {
             table={tables.find(t => t.id === selectedTableId)}
             servers={servers}
             now={now}
+            check={posByTable[String(selectedTableId)] || null}
             reservations={reservations}
             shiftWindow={shiftWindowFor(viewDateStr, restaurantHours ? restaurantHours.open : null, restaurantHours ? restaurantHours.close : null)}
             viewDateStr={viewDateStr}

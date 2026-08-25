@@ -21,6 +21,33 @@ export async function getFloorState(restaurantId: string) {
     select: { id: true, name: true, floorId: true, area: true, capacity: true, status: true, party: true, partySize: true, seatedAt: true, assignedServerId: true, groupId: true },
     orderBy: { name: "asc" },
   });
+  // POS shared-DB link: live check pace per table — courses fired, last
+  // kitchen activity, and paid-but-still-seated — the sentry's best
+  // turn-prediction facts. Guarded: no POS activity → no pace fields.
+  const paceByTable = new Map<string, { course: number; totalCents: number; lastFireMinutes: number | null; lastBumpMinutes: number | null; paidMinutesAgo: number | null }>();
+  try {
+    const recent = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const checks = await prisma.check.findMany({
+      where: { restaurantId, tableId: { not: null }, OR: [{ status: "open" }, { status: "closed", closedAt: { gte: recent } }] },
+      orderBy: { openedAt: "desc" },
+      select: { tableId: true, status: true, currentCourse: true, totalCents: true, closedAt: true, items: { select: { state: true, firedAt: true, bumpedAt: true } } },
+    });
+    const now = Date.now();
+    for (const check of checks) {
+      if (!check.tableId || paceByTable.has(check.tableId)) continue;
+      const lastFire = check.items.reduce<number | null>((max, item) => { const t = item.firedAt?.getTime() ?? null; return t != null && (max == null || t > max) ? t : max; }, null);
+      const lastBump = check.items.reduce<number | null>((max, item) => { const t = item.bumpedAt?.getTime() ?? null; return t != null && (max == null || t > max) ? t : max; }, null);
+      paceByTable.set(check.tableId, {
+        course: check.currentCourse,
+        totalCents: check.totalCents,
+        lastFireMinutes: lastFire != null ? Math.round((now - lastFire) / 60000) : null,
+        lastBumpMinutes: lastBump != null ? Math.round((now - lastBump) / 60000) : null,
+        paidMinutesAgo: check.status === "closed" && check.closedAt ? Math.round((now - check.closedAt.getTime()) / 60000) : null,
+      });
+    }
+  } catch (err) {
+    console.warn("[copilot-data] check pace unavailable:", err);
+  }
   const seated = rows.filter((table) => table.status === "seated" || table.status === "dining");
   return {
     generatedAt: new Date().toISOString(),
@@ -29,6 +56,7 @@ export async function getFloorState(restaurantId: string) {
       id: table.id, name: table.name, floorId: table.floorId, zone: table.area, seats: table.capacity,
       status: table.status, party: table.party, partySize: table.partySize,
       seatedMinutes: ageMinutes(table.seatedAt), serverId: table.assignedServerId, merged: !!table.groupId,
+      checkPace: paceByTable.get(table.id) ?? null,
     })),
   };
 }

@@ -10,6 +10,7 @@ import { prisma } from "@/lib/prisma";
 import { requireRestaurantId } from "@/lib/tenant";
 import { serviceDateOf, todayKey } from "@/lib/db-mappers";
 import { invalidateShiftIntel } from "@/lib/shift-intel";
+import { emitServiceEvents } from "@/lib/service-events";
 
 const dateParam = (req: Request) => {
   const raw = new URL(req.url).searchParams.get("date");
@@ -60,6 +61,16 @@ export async function PUT(req: Request) {
       update: { roster, sections },
     });
     invalidateShiftIntel(restaurantId, dateKey);
+    // Shared-DB link: broadcast tonight's sections so the POS floor view
+    // (server ownership, "my tables") refreshes without a reload.
+    if (dateKey === todayKey()) {
+      await emitServiceEvents(restaurantId, [{
+        source: "os",
+        type: "SECTIONS_ASSIGNED",
+        tableIds: Object.keys(sections as Record<string, string>),
+        payload: { date: dateKey, roster, sections },
+      }]);
+    }
     return Response.json({ ok: true, date: dateKey });
   } catch (err) {
     console.error("[api/service-day PUT]", err);

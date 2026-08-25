@@ -86,6 +86,72 @@ function numberAt(value: unknown, path: string[]) {
 }
 
 /**
+ * POS dividend (shared-DB link): money + pacing metrics from TableSession
+ * rows and live Checks. Null when the restaurant has no POS activity —
+ * the dossier (and every prompt built from it) is unchanged pre-POS.
+ * Wrapped in its own try/catch: a POS query failure never takes down the
+ * floor dossier.
+ */
+async function getPosMetrics(restaurantId: string, serviceDate: Date) {
+  try {
+    const since = new Date(serviceDate.getTime() - 45 * 24 * 60 * 60 * 1000);
+    const [sessions, openChecks] = await Promise.all([
+      prisma.tableSession.findMany({
+        where: { restaurantId, serviceDate: { gte: since, lte: serviceDate } },
+        select: {
+          serviceDate: true, guestCount: true, seatedAt: true, firstOrderAt: true,
+          lastBumpAt: true, checkPaidAt: true, clearedAt: true, turnMinutes: true,
+          paidToClearMinutes: true, totalCents: true, tipCents: true, ppaCents: true,
+        },
+      }),
+      prisma.check.findMany({
+        where: { restaurantId, status: "open" },
+        select: { totalCents: true, guestCount: true, openedAt: true, currentCourse: true },
+      }),
+    ]);
+    if (!sessions.length && !openChecks.length) return null;
+
+    const minutesBetween = (a: Date | null, b: Date | null) =>
+      a && b ? Math.round((b.getTime() - a.getTime()) / 60000) : null;
+    const summarize = (rows: typeof sessions) => {
+      const paid = rows.filter((row) => row.totalCents != null);
+      const revenueCents = paid.reduce((sum, row) => sum + (row.totalCents ?? 0), 0);
+      const tipCents = paid.reduce((sum, row) => sum + (row.tipCents ?? 0), 0);
+      const ppas = paid.map((row) => row.ppaCents).filter((v): v is number => v != null && v > 0);
+      const seatToOrder = rows.map((row) => minutesBetween(row.seatedAt, row.firstOrderAt)).filter((v): v is number => v != null && v >= 0 && v <= 120);
+      const paidToClear = rows.map((row) => row.paidToClearMinutes).filter((v): v is number => v != null && v >= 0 && v <= 120);
+      const posTurns = rows.map((row) => row.turnMinutes).filter((v): v is number => v != null && v >= 20 && v <= 360);
+      return {
+        paidChecks: paid.length,
+        revenueCents,
+        tipCents,
+        tipPct: revenueCents > tipCents && revenueCents > 0 ? Number((tipCents / (revenueCents - tipCents) * 100).toFixed(1)) : null,
+        avgPpaCents: ppas.length ? Math.round(mean(ppas)) : null,
+        avgSeatToFirstOrderMinutes: seatToOrder.length ? Math.round(mean(seatToOrder)) : null,
+        avgPaidToClearMinutes: paidToClear.length ? Math.round(mean(paidToClear)) : null,
+        avgTurnMinutes: posTurns.length ? Math.round(mean(posTurns)) : null,
+      };
+    };
+
+    const todayRows = sessions.filter((row) => row.serviceDate.getTime() === serviceDate.getTime());
+    const historyRows = sessions.filter((row) => row.serviceDate.getTime() < serviceDate.getTime());
+    const now = Date.now();
+    return {
+      today: summarize(todayRows),
+      history: { days: new Set(historyRows.map((row) => row.serviceDate.getTime())).size, ...summarize(historyRows) },
+      live: {
+        openChecks: openChecks.length,
+        openTotalCents: openChecks.reduce((sum, check) => sum + check.totalCents, 0),
+        oldestOpenMinutes: openChecks.length ? Math.max(...openChecks.map((check) => Math.round((now - check.openedAt.getTime()) / 60000))) : null,
+      },
+    };
+  } catch (err) {
+    console.warn("[shift-intel] pos metrics unavailable:", err);
+    return null;
+  }
+}
+
+/**
  * Deterministic source of truth for shift volume and operational shape.
  * It only reads tenant-scoped records; LLMs may consume its output but never
  * contribute to it. A short in-process aggregate cache amortizes repeated
@@ -233,8 +299,10 @@ export async function getShiftIntel(restaurantId: string, date: string): Promise
     };
   }).sort((a, b) => b.projectedCovers - a.projectedCovers || a.name.localeCompare(b.name));
   const lastTableOutMinutes = lastOuts.length ? Math.round(mean(lastOuts)) : null;
+  const pos = await getPosMetrics(restaurantId, serviceDate);
   const value: Dossier = {
     date: shiftDate, closed,
+    pos,
     expectedCovers: { value: expected, source: expectedSource, forecastSource: stored?.source ?? null, generatedAt: stored?.createdAt?.toISOString() ?? null, modeledFrom: expectedSource === "model" ? { sameWeekdayDays: sameWeekday.length, historyDays: serviceDays.length, seasonalMultiplier: seasonal, baselineCovers: baselineBase || null } : null },
     forecast: stored ? { source: stored.source, generatedAt: stored.createdAt.toISOString(), payload: stored.payload } : null,
     reservationVsWalkIn: { bookedCovers, bookedParties: book.length, expectedWalkIns, walkInSharePct: Math.round(walkShare * 100), source: serviceDays.length >= 4 ? "observed history blended with baseline" : baselineWalkShare != null ? "owner baseline" : "observed history" },

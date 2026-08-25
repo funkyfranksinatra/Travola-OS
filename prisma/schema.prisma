@@ -192,6 +192,9 @@ model Server {
   /// the section auto-assigner never drafts them and never reassigns
   /// tables they hold. Manual assignment remains possible.
   aiExcluded Boolean @default(false)
+  /// 4-digit POS login PIN (shared-DB integration). Null = no POS
+  /// access. Plaintext at pilot scale — hash when multi-tenant hardens.
+  pin      String?
   active   Boolean  @default(true)
   createdAt DateTime @default(now())
 
@@ -203,6 +206,7 @@ model Server {
 
   @@index([restaurantId])
   @@index([restaurantId, active])
+  @@unique([restaurantId, pin])
 }
 
 // ─── Reservations (the single lifecycle table) ───────────────────────
@@ -504,4 +508,247 @@ model ServiceDayStaff {
 
   @@id([restaurantId, serviceDate])
   @@index([restaurantId])
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// POS + Shift-Link (shared-DB integration, Aug 2026)
+//
+// One database, two apps. The POS (Travola-POS repo) points its
+// DATABASE_URL at this same database; the models below are the POS's
+// tables plus the shared communication layer. MIGRATION OWNERSHIP:
+// this repo is the ONLY one that runs `prisma migrate` — the POS repo
+// mirrors the models it touches and only ever runs `prisma generate`.
+//
+// POS models deliberately carry restaurantId as a plain String (no
+// Restaurant relation): additive rollout with zero changes to existing
+// relation lists, same tenant-guard discipline in code.
+// ═══════════════════════════════════════════════════════════════════
+
+// ─── Shared communication layer ──────────────────────────────────────
+
+/// The OS ↔ POS event bus, append-only. Every service action either app
+/// takes lands here; the other app (and the shift-intel layer) tails it
+/// by `seq` cursor — same 3–5s polling pattern as the KDS. Events are
+/// ALSO the raw feed the predictor mines (course pacing, pay-to-clear).
+model ServiceEvent {
+  id           String   @id @default(cuid())
+  /// Monotonic cursor for cheap `?since=` polling (BIGSERIAL).
+  seq          BigInt   @unique @default(autoincrement())
+  restaurantId String
+  /// "os" | "pos" — which app emitted it.
+  source       String
+  /// TABLE_SEATED | TABLE_FINISHED | TABLE_CLEARED | TABLE_MOVED |
+  /// TABLES_MERGED | TABLES_UNMERGED | SECTION_ASSIGNED |
+  /// SECTIONS_ASSIGNED | LAYOUT_UPDATED | CHECK_OPENED | COURSE_FIRED |
+  /// COURSE_BUMPED | CHECK_PAID | CHECK_CLOSED | NOTE
+  type         String
+  /// Reservation/waitlist id when known — the party seam.
+  partyKey     String?
+  tableIds     String[]
+  serverId     String?
+  checkId      String?
+  serviceDate  DateTime @db.Date
+  payload      Json?
+  createdAt    DateTime @default(now())
+
+  @@index([restaurantId, seq])
+  @@index([restaurantId, serviceDate, type])
+}
+
+/// One seated party from seat → clear: the analytic unit shift
+/// intelligence trains on. Maintained incrementally by BOTH apps as
+/// events happen (floor writes the seating spine, POS writes the money
+/// and course pacing). Reservation.turnMinutes keeps working as before;
+/// this row adds the POS-enriched picture.
+model TableSession {
+  id                 String    @id @default(cuid())
+  restaurantId       String
+  serviceDate        DateTime  @db.Date
+  partyKey           String?
+  partyName          String?
+  tableIds           String[]
+  primaryTableId     String
+  serverId           String?
+  guestCount         Int?
+  seatedAt           DateTime
+  firstOrderAt       DateTime?
+  lastFireAt         DateTime?
+  lastBumpAt         DateTime?
+  checkPaidAt        DateTime?
+  clearedAt          DateTime?
+  turnMinutes        Int?
+  paidToClearMinutes Int?
+  checkId            String?
+  subtotalCents      Int?
+  totalCents         Int?
+  tipCents           Int?
+  /// Per-person average, derived at close: totalCents / guestCount.
+  ppaCents           Int?
+  /// [{course, firedAt, bumpedAt}] — course pacing detail.
+  courseTimings      Json?
+  /// [{at, fromTableIds, toTableIds}] — moves/merges history.
+  moves              Json?
+  /// "floor" | "pos" — which app created the session.
+  origin             String    @default("floor")
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([restaurantId, serviceDate])
+  @@index([restaurantId, primaryTableId, clearedAt])
+  @@index([restaurantId, checkId])
+}
+
+// ─── POS catalog ─────────────────────────────────────────────────────
+
+model MenuCategory {
+  id           String     @id @default(cuid())
+  restaurantId String
+  name         String
+  sortOrder    Int        @default(0)
+  active       Boolean    @default(true)
+  items        MenuItem[]
+
+  @@index([restaurantId])
+}
+
+model MenuItem {
+  id             String          @id @default(cuid())
+  restaurantId   String
+  categoryId     String
+  category       MenuCategory    @relation(fields: [categoryId], references: [id])
+  name           String
+  priceCents     Int
+  station        String
+  active         Boolean         @default(true)
+  sortOrder      Int             @default(0)
+  ephemeral      Boolean         @default(false)
+  expiresAt      DateTime?
+  description    String          @default("")
+  createdBy      String          @default("")
+  modifierGroups ModifierGroup[]
+
+  @@index([restaurantId, categoryId])
+}
+
+model ModifierGroup {
+  id           String     @id @default(cuid())
+  restaurantId String
+  name         String
+  minSelect    Int        @default(0)
+  maxSelect    Int        @default(1)
+  modifiers    Modifier[]
+  items        MenuItem[]
+
+  @@index([restaurantId])
+}
+
+model Modifier {
+  id         String        @id @default(cuid())
+  groupId    String
+  group      ModifierGroup @relation(fields: [groupId], references: [id])
+  name       String
+  priceCents Int           @default(0)
+  sortOrder  Int           @default(0)
+}
+
+// ─── POS orders ──────────────────────────────────────────────────────
+
+model Check {
+  id            String      @id @default(cuid())
+  restaurantId  String
+  /// Reservation/waitlist id from live floor state — the party seam.
+  partyKey      String?
+  tableLabel    String
+  /// Table.id (the SHARED floor table) when opened from the floor view.
+  tableId       String?
+  /// Server.id (shared staff table; PIN login).
+  serverId      String?
+  serverName    String      @default("")
+  status        String      @default("open")
+  openedAt      DateTime    @default(now())
+  closedAt      DateTime?
+  subtotalCents Int         @default(0)
+  taxCents      Int         @default(0)
+  tipCents      Int         @default(0)
+  totalCents    Int         @default(0)
+  guestCount    Int         @default(1)
+  currentCourse Int         @default(1)
+  items         CheckItem[]
+  payments      Payment[]
+
+  @@index([restaurantId, status])
+  @@index([restaurantId, openedAt])
+  @@index([restaurantId, tableId, status])
+}
+
+model CheckItem {
+  id           String    @id @default(cuid())
+  checkId      String
+  check        Check     @relation(fields: [checkId], references: [id])
+  menuItemId   String
+  nameSnapshot String
+  priceCents   Int
+  quantity     Int       @default(1)
+  seat         Int?
+  course       Int       @default(1)
+  modifiers    Json
+  station      String
+  state        String    @default("held")
+  note         String    @default("")
+  firedAt      DateTime?
+  bumpedAt     DateTime?
+  voidReason   String?
+
+  @@index([checkId])
+  @@index([station, state])
+}
+
+model Payment {
+  id                    String   @id @default(cuid())
+  restaurantId          String
+  checkId               String
+  check                 Check    @relation(fields: [checkId], references: [id])
+  method                String
+  amountCents           Int
+  tipCents              Int      @default(0)
+  stripePaymentIntentId String?
+  status                String   @default("captured")
+  createdAt             DateTime @default(now())
+
+  @@index([restaurantId, createdAt])
+}
+
+// ─── POS stations, add-ons, settings ─────────────────────────────────
+
+model AddOn {
+  id           String    @id @default(cuid())
+  restaurantId String
+  menuItemId   String?
+  name         String
+  priceCents   Int       @default(0)
+  ephemeral    Boolean   @default(false)
+  expiresAt    DateTime?
+  createdBy    String    @default("")
+  createdAt    DateTime  @default(now())
+
+  @@index([restaurantId, menuItemId])
+}
+
+model Station {
+  id           String  @id @default(cuid())
+  restaurantId String
+  key          String
+  name         String
+  kind         String  @default("kds")
+  printerToken String? @unique
+
+  @@unique([restaurantId, key])
+}
+
+model PosSettings {
+  id            String @id @default(cuid())
+  restaurantId  String @unique
+  taxRateBps    Int    @default(840)
+  tipPresets    Json   @default("[18, 20, 25]")
+  receiptFooter String @default("")
 }

@@ -17,6 +17,12 @@
 import { prisma } from "@/lib/prisma";
 import { requireRestaurantId } from "@/lib/tenant";
 import { Prisma } from "@prisma/client";
+import {
+  deriveFloorEvents,
+  emitServiceEvents,
+  latestServiceResetBoundary,
+  type LiveTableState,
+} from "@/lib/service-events";
 
 type FloorIn = { id: string; name: string; isManualOnly?: boolean; onlineExcluded?: boolean };
 type TableIn = {
@@ -56,29 +62,70 @@ async function foreignIdentityCollisions(restaurantId: string, floorIds: string[
   return { floors: floors.map((floor) => floor.id), tables: tables.map((table) => table.id) };
 }
 
-/** Most recent daily service-reset tick: (open − 60min), or 4:00 AM when
- *  hours are unset. Mirrored in page.tsx — keep the two in sync. */
-function latestServiceResetBoundary(now: Date, openMinutes: number | null, closeMinutes: number | null): Date {
-  let resetMin: number;
-  if (closeMinutes == null) {
-    resetMin = openMinutes == null ? 4 * 60 : (openMinutes - 60 + 1440) % 1440;
-  } else {
-    const overnight = openMinutes != null && closeMinutes <= openMinutes;
-    resetMin = ((closeMinutes + (overnight ? 1440 : 0)) + 90) % 1440;
+// latestServiceResetBoundary now lives in lib/service-events.ts (single
+// source of truth — the event differ needs the same tick). Mirrored in
+// page.tsx — keep the two in sync.
+
+/** Open/recently-closed POS check summaries, keyed by shared Table.id.
+ *  The floor surfaces the check's pace and pay state on each tile; a
+ *  check closed while the table is still occupied renders as PAID. */
+async function checkSummariesByTable(restaurantId: string) {
+  try {
+    const recent = new Date(Date.now() - 3 * 60 * 60 * 1000);
+    const checks = await prisma.check.findMany({
+      where: {
+        restaurantId,
+        tableId: { not: null },
+        OR: [{ status: "open" }, { status: "closed", closedAt: { gte: recent } }],
+      },
+      orderBy: { openedAt: "desc" },
+      select: {
+        id: true, tableId: true, status: true, totalCents: true, guestCount: true,
+        currentCourse: true, openedAt: true, closedAt: true, serverName: true,
+        items: { select: { state: true, firedAt: true } },
+      },
+    });
+    const byTable = new Map<string, ReturnType<typeof summarize>>();
+    function summarize(c: (typeof checks)[number]) {
+      const fired = c.items.filter((i) => i.state === "fired");
+      const lastFire = fired.reduce<number | null>((max, i) => {
+        const t = i.firedAt?.getTime() ?? null;
+        return t != null && (max == null || t > max) ? t : max;
+      }, null);
+      return {
+        id: c.id,
+        status: c.status,
+        totalCents: c.totalCents,
+        guestCount: c.guestCount,
+        course: c.currentCourse,
+        itemCount: c.items.filter((i) => i.state !== "voided").length,
+        firedCount: fired.length,
+        lastFireAt: lastFire,
+        openedAt: c.openedAt.getTime(),
+        paidAt: c.status === "closed" && c.closedAt ? c.closedAt.getTime() : null,
+        serverName: c.serverName,
+      };
+    }
+    for (const c of checks) {
+      if (c.tableId && !byTable.has(c.tableId)) byTable.set(c.tableId, summarize(c));
+    }
+    return byTable;
+  } catch (err) {
+    // Pre-migration databases have no Check table; the floor must load.
+    console.warn("[api/floor GET] check summaries unavailable:", err);
+    return new Map<string, never>();
   }
-  const tick = new Date(now.getFullYear(), now.getMonth(), now.getDate(), Math.floor(resetMin / 60), resetMin % 60);
-  if (tick.getTime() > now.getTime()) tick.setDate(tick.getDate() - 1);
-  return tick;
 }
 
 // ── GET: layout + live state (stale live state served clean) ─────────
 export async function GET(req: Request) {
   try {
     const auth = requireRestaurantId(req); if ("response" in auth) return auth.response; const { restaurantId } = auth;
-    const [floors, tables, settings] = await Promise.all([
+    const [floors, tables, settings, checksByTable] = await Promise.all([
       prisma.floor.findMany({ where: { restaurantId, active: true }, orderBy: { sortOrder: "asc" } }),
       prisma.table.findMany({ where: { restaurantId, active: true } }),
       prisma.restaurantSettings.findUnique({ where: { restaurantId } }),
+      checkSummariesByTable(restaurantId),
     ]);
     const boundary = latestServiceResetBoundary(new Date(), settings?.openMinutes ?? null, settings?.closeMinutes ?? null);
 
@@ -110,6 +157,9 @@ export async function GET(req: Request) {
           startedAt: fresh && t.seatedAt ? t.seatedAt.getTime() : null,
           groupId: fresh && t.groupId != null ? Number(t.groupId) : null,
           assignedServerId: fresh ? t.assignedServerId : null,
+          // POS shared-DB link: the table's live check (or its just-paid
+          // check while the party is still seated). Null when no POS.
+          check: fresh ? checksByTable.get(String(t.id)) ?? null : null,
         };
       }),
     });
@@ -128,6 +178,18 @@ export async function PATCH(req: Request) {
     if (live.length === 0) return Response.json({ ok: false, reason: "empty_snapshot" }, { status: 400 });
 
     const now = new Date();
+    // Shared-DB link: capture the PREVIOUS live state before the write so
+    // the event differ can derive what happened (seats, moves, merges,
+    // clears, section changes) — the POS and shift intel tail the result.
+    const liveIds = live.map((t) => String(t.id));
+    const [prevRows, settingsForBoundary] = await Promise.all([
+      prisma.table.findMany({
+        where: { restaurantId, id: { in: liveIds } },
+        select: { id: true, status: true, party: true, partySize: true, seatedAt: true, groupId: true, assignedServerId: true, liveUpdatedAt: true },
+      }),
+      prisma.restaurantSettings.findUnique({ where: { restaurantId }, select: { openMinutes: true, closeMinutes: true } }),
+    ]);
+    const patchBoundary = latestServiceResetBoundary(now, settingsForBoundary?.openMinutes ?? null, settingsForBoundary?.closeMinutes ?? null);
     // ONE bulk UPDATE ... FROM (VALUES ...) instead of one updateMany per
     // table: 73 tables were 73 sequential Neon roundtrips inside one
     // transaction — ~6s of latency against a 5s transaction timeout
@@ -156,6 +218,33 @@ export async function PATCH(req: Request) {
       FROM (VALUES ${Prisma.join(rows)})
         AS v("id", "status", "party", "partySize", "seatedAt", "groupId", "assignedServerId", "liveUpdatedAt")
       WHERE t."id" = v."id" AND t."restaurantId" = ${restaurantId}`;
+
+    // Derive + emit service events from the state change (never throws;
+    // a bus failure must not fail the floor save). Stale previous state
+    // (last service day) is treated as a clean room.
+    const prevStates: LiveTableState[] = prevRows.map((t) => {
+      const fresh = t.liveUpdatedAt != null && t.liveUpdatedAt >= patchBoundary;
+      return {
+        id: t.id,
+        status: fresh ? t.status : "available",
+        party: fresh ? t.party : null,
+        partySize: fresh ? t.partySize : null,
+        seatedAt: fresh ? t.seatedAt : null,
+        groupId: fresh ? t.groupId : null,
+        assignedServerId: fresh ? t.assignedServerId : null,
+      };
+    });
+    const nextStates: LiveTableState[] = live.map((t) => ({
+      id: String(t.id),
+      status: t.status || "available",
+      party: t.party ?? null,
+      partySize: t.partySize ?? null,
+      seatedAt: t.startedAt != null ? new Date(Number(t.startedAt)) : null,
+      groupId: t.groupId != null ? String(t.groupId) : null,
+      assignedServerId: t.assignedServerId ?? null,
+    }));
+    await deriveFloorEvents(restaurantId, prevStates, nextStates, patchBoundary);
+
     return Response.json({ ok: true, tables: live.length });
   } catch (err) {
     console.error("[api/floor PATCH]", err);
@@ -265,6 +354,15 @@ export async function PUT(req: Request) {
         throw new LayoutWriteIncompleteError(floorIds, tableIds, [...floorSet], [...tableSet]);
       }
     });
+
+    // Shared-DB link: tell the POS (and anyone else tailing the bus)
+    // that the room's geometry changed — its floor view re-fetches.
+    await emitServiceEvents(restaurantId, [{
+      source: "os",
+      type: "LAYOUT_UPDATED",
+      tableIds: incomingTableIds,
+      payload: { floors: floors.length, tables: tables.length },
+    }]);
 
     return Response.json({ ok: true, floors: floors.length, tables: tables.length });
   } catch (err) {
